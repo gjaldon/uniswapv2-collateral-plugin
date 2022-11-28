@@ -1,0 +1,39 @@
+{
+  "name": "uniswapv2-collateral",
+  "version": "1.0.0",
+  "description": "A Reserve Collateral Plugin for UniswapV2",
+  "main": "index.js",
+  "scripts": {
+    "test": "hardhat test"
+  },
+  "author": "Gabriel Jaldon (https://github.com/gjaldon)",
+  "respository": "https://github.com/gjaldon/uniswapv2-collateral-plugin",
+  "license": "ISC",
+  "devDependencies": {
+    "@chainlink/contracts": "^0.5.1",
+    "@nomicfoundation/hardhat-chai-matchers": "^1.0.4",
+    "@nomicfoundation/hardhat-network-helpers": "^1.0.6",
+    "@nomicfoundation/hardhat-toolbox": "^2.0.0",
+    "@nomiclabs/hardhat-ethers": "^2.2.0",
+    "@nomiclabs/hardhat-etherscan": "^3.1.1",
+    "@openzeppelin/contracts": "^4.7.3",
+    "@openzeppelin/contracts-upgradeable": "^4.7.3",
+    "@typechain/ethers-v5": "^10.1.0",
+    "@typechain/hardhat": "^6.1.3",
+    "@types/chai": "^4.3.3",
+    "@types/node": "^18.11.2",
+    "chai": "^4.3.6",
+    "ethers": "^5.7.1",
+    "hardhat": "^2.12.0",
+    "hardhat-dependency-compiler": "^1.1.3",
+    "hardhat-gas-reporter": "^1.0.9",
+    "reserve": "git@github.com:gjaldon/protocol.git",
+    "solidity-coverage": "^0.8.2",
+    "ts-node": "^10.9.1",
+    "typechain": "^8.1.0",
+    "typescript": "^4.8.4"
+  },
+  "dependencies": {
+    "dotenv": "^16.0.3"
+  }
+}
