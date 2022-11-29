@@ -1,0 +1,8 @@
+{
+  "[solidity]": {
+    "editor.tabSize": 4,
+    "editor.defaultFormatter": "NomicFoundation.hardhat-solidity"
+  },
+  "editor.defaultFormatter": "esbenp.prettier-vscode",
+  "editor.tabSize": 2
+}
