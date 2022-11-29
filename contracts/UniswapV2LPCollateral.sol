@@ -64,24 +64,15 @@ contract UniswapV2LPCollateral is ICollateral {
     constructor(Configuration memory config) {
         require(config.fallbackPrice > 0, "fallback price zero");
         require(address(config.pair) != address(0), "missing pair address");
-        require(
-            address(config.token0priceFeed) != address(0),
-            "missing chainlink feed"
-        );
-        require(
-            address(config.token1priceFeed) != address(0),
-            "missing chainlink feed"
-        );
+        require(address(config.token0priceFeed) != address(0), "missing chainlink feed");
+        require(address(config.token1priceFeed) != address(0), "missing chainlink feed");
         require(config.maxTradeVolume > 0, "invalid max trade volume");
         require(config.oracleTimeout > 0, "oracleTimeout zero");
         require(config.defaultThreshold > 0, "defaultThreshold zero");
         require(config.targetName != bytes32(0), "targetName missing");
         require(config.delayUntilDefault > 0, "delayUntilDefault zero");
         require(config.reservesThresholdIffy > 0, "reservesThresholdIffy zero");
-        require(
-            config.reservesThresholdDisabled > 0,
-            "reservesThresholdDisabled zero"
-        );
+        require(config.reservesThresholdDisabled > 0, "reservesThresholdDisabled zero");
 
         targetName = config.targetName;
         delayUntilDefault = config.delayUntilDefault;
@@ -133,9 +124,7 @@ contract UniswapV2LPCollateral is ICollateral {
     /// @param allowFallback Whether to try the fallback price in case precise price reverts
     /// @return isFallback If the price is a allowFallback price
     /// @return {UoA/tok} The current price, or if it's reverting, a fallback price
-    function price(
-        bool allowFallback
-    ) public view returns (bool isFallback, uint192) {
+    function price(bool allowFallback) public view returns (bool isFallback, uint192) {
         try this.strictPrice() returns (uint192 p) {
             return (false, p);
         } catch {
@@ -147,11 +136,11 @@ contract UniswapV2LPCollateral is ICollateral {
     /// @return {ref/tok} Quantity of whole reference units per whole collateral tokens
     function refPerTok() public view returns (uint192) {
         (uint112 reserves0, uint112 reserves1, ) = pair.getReserves();
-        return
-            uint192(
-                (Math.sqrt(reserves0 * reserves1) * FIX_ONE) /
-                    pair.totalSupply()
-            );
+        uint192 invariant = shiftl_toFix(reserves0, -int8(token0decimals)).mul(
+            shiftl_toFix(reserves1, -int8(token1decimals))
+        );
+        uint256 sqrt = Math.sqrt(invariant);
+        return uint192(_divrnd(sqrt, pair.totalSupply(), FLOOR));
     }
 
     /// @return {target/ref} Quantity of whole target units per whole reference unit in the peg
@@ -198,7 +187,7 @@ contract UniswapV2LPCollateral is ICollateral {
     }
 
     function lpTokenPrice() public view returns (uint192) {
-        return _safeWrap((totalLiquidity() * pair.totalSupply()) / FIX_ONE);
+        return _safeWrap((totalLiquidity() * FIX_SCALE) / pair.totalSupply());
     }
 
     function markStatus(CollateralStatus status_) internal {
@@ -207,10 +196,7 @@ contract UniswapV2LPCollateral is ICollateral {
         if (status_ == CollateralStatus.SOUND) {
             _whenDefault = NEVER;
         } else if (status_ == CollateralStatus.IFFY) {
-            _whenDefault = Math.min(
-                block.timestamp + delayUntilDefault,
-                _whenDefault
-            );
+            _whenDefault = Math.min(block.timestamp + delayUntilDefault, _whenDefault);
         } else if (status_ == CollateralStatus.DISABLED) {
             _whenDefault = block.timestamp;
         }
