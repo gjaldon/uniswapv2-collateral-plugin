@@ -1,26 +1,26 @@
-// SPDX-License-Identifier: BlueOak-1.0.0
+// SPDX-License-Identifier: ISC
 pragma solidity 0.8.9;
 
-import "./ICollateral.sol";
 import "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 import "@openzeppelin/contracts/utils/math/Math.sol";
+import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "reserve/contracts/plugins/assets/OracleLib.sol";
 import "reserve/contracts/libraries/Fixed.sol";
+import "./ICollateral.sol";
+import "./IUniswapV2Pair.sol";
+import "hardhat/console.sol";
 
 /**
- * @title Collateral
- * Parent class for all collateral
- * @dev By default, expects all units to be equal: tok == ref == target == UoA
- * @dev But no user is likely to want that, and that's why this contract is abstract
+ * @title UniswapV2LPCollateral
  */
-contract Collateral is ICollateral {
+contract UniswapV2LPCollateral is ICollateral {
     using OracleLib for AggregatorV3Interface;
     using FixLib for uint192;
 
     struct Configuration {
-        IERC20Metadata erc20;
-        IERC20 rewardERC20;
-        AggregatorV3Interface chainlinkFeed;
+        IUniswapV2Pair pair;
+        AggregatorV3Interface token0priceFeed;
+        AggregatorV3Interface token1priceFeed;
         bytes32 targetName;
         uint48 oracleTimeout;
         uint192 fallbackPrice;
@@ -31,10 +31,13 @@ contract Collateral is ICollateral {
         uint256 reservesThresholdDisabled;
     }
 
-    AggregatorV3Interface public immutable chainlinkFeed;
+    AggregatorV3Interface public immutable token0priceFeed;
+    AggregatorV3Interface public immutable token1priceFeed;
     IERC20Metadata public immutable erc20;
-    IERC20 public immutable rewardERC20;
+    IUniswapV2Pair public immutable pair;
 
+    uint8 public immutable token0decimals;
+    uint8 public immutable token1decimals;
     uint8 public immutable erc20Decimals;
     uint48 public immutable oracleTimeout; // {s} Seconds that an oracle value is considered valid
 
@@ -60,24 +63,36 @@ contract Collateral is ICollateral {
 
     constructor(Configuration memory config) {
         require(config.fallbackPrice > 0, "fallback price zero");
-        require(address(config.chainlinkFeed) != address(0), "missing chainlink feed");
-        require(address(config.erc20) != address(0), "missing erc20");
+        require(address(config.pair) != address(0), "missing pair address");
+        require(
+            address(config.token0priceFeed) != address(0),
+            "missing chainlink feed"
+        );
+        require(
+            address(config.token1priceFeed) != address(0),
+            "missing chainlink feed"
+        );
         require(config.maxTradeVolume > 0, "invalid max trade volume");
         require(config.oracleTimeout > 0, "oracleTimeout zero");
-        require(address(config.rewardERC20) != address(0), "rewardERC20 missing");
         require(config.defaultThreshold > 0, "defaultThreshold zero");
         require(config.targetName != bytes32(0), "targetName missing");
         require(config.delayUntilDefault > 0, "delayUntilDefault zero");
         require(config.reservesThresholdIffy > 0, "reservesThresholdIffy zero");
-        require(config.reservesThresholdDisabled > 0, "reservesThresholdDisabled zero");
+        require(
+            config.reservesThresholdDisabled > 0,
+            "reservesThresholdDisabled zero"
+        );
 
         targetName = config.targetName;
         delayUntilDefault = config.delayUntilDefault;
+        pair = config.pair;
         fallbackPrice = config.fallbackPrice;
-        chainlinkFeed = config.chainlinkFeed;
-        erc20 = config.erc20;
+        token0priceFeed = config.token0priceFeed;
+        token1priceFeed = config.token1priceFeed;
+        erc20 = IERC20Metadata(address(config.pair));
         erc20Decimals = erc20.decimals();
-        rewardERC20 = config.rewardERC20;
+        token0decimals = IERC20Metadata(address(pair.token0())).decimals();
+        token1decimals = IERC20Metadata(address(pair.token1())).decimals();
         maxTradeVolume = config.maxTradeVolume;
         oracleTimeout = config.oracleTimeout;
         defaultThreshold = config.defaultThreshold;
@@ -110,7 +125,7 @@ contract Collateral is ICollateral {
     }
 
     function strictPrice() public view returns (uint192) {
-        return chainlinkFeed.price(oracleTimeout).mul(refPerTok());
+        return lpTokenPrice().mul(refPerTok());
     }
 
     /// Can return 0
@@ -118,7 +133,9 @@ contract Collateral is ICollateral {
     /// @param allowFallback Whether to try the fallback price in case precise price reverts
     /// @return isFallback If the price is a allowFallback price
     /// @return {UoA/tok} The current price, or if it's reverting, a fallback price
-    function price(bool allowFallback) public view returns (bool isFallback, uint192) {
+    function price(
+        bool allowFallback
+    ) public view returns (bool isFallback, uint192) {
         try this.strictPrice() returns (uint192 p) {
             return (false, p);
         } catch {
@@ -127,10 +144,14 @@ contract Collateral is ICollateral {
         }
     }
 
-
     /// @return {ref/tok} Quantity of whole reference units per whole collateral tokens
     function refPerTok() public view returns (uint192) {
-        return FIX_ONE;
+        (uint112 reserves0, uint112 reserves1, ) = pair.getReserves();
+        return
+            uint192(
+                (Math.sqrt(reserves0 * reserves1) * FIX_ONE) /
+                    pair.totalSupply()
+            );
     }
 
     /// @return {target/ref} Quantity of whole target units per whole reference unit in the peg
@@ -161,6 +182,24 @@ contract Collateral is ICollateral {
     }
 
     // === Helpers ===
+    function totalLiquidity() public view returns (uint192) {
+        (uint112 reserves0, uint112 reserves1, ) = pair.getReserves();
+
+        uint192 totalReserves0price = shiftl_toFix(
+            token0priceFeed.price(oracleTimeout).mul(reserves0),
+            -int8(token0decimals)
+        );
+        uint192 totalReserves1price = shiftl_toFix(
+            token1priceFeed.price(oracleTimeout).mul(reserves1),
+            -int8(token1decimals)
+        );
+
+        return totalReserves0price.plus(totalReserves1price);
+    }
+
+    function lpTokenPrice() public view returns (uint192) {
+        return _safeWrap((totalLiquidity() * pair.totalSupply()) / FIX_ONE);
+    }
 
     function markStatus(CollateralStatus status_) internal {
         if (_whenDefault <= block.timestamp) return; // prevent DISABLED -> SOUND/IFFY
@@ -168,7 +207,10 @@ contract Collateral is ICollateral {
         if (status_ == CollateralStatus.SOUND) {
             _whenDefault = NEVER;
         } else if (status_ == CollateralStatus.IFFY) {
-            _whenDefault = Math.min(block.timestamp + delayUntilDefault, _whenDefault);
+            _whenDefault = Math.min(
+                block.timestamp + delayUntilDefault,
+                _whenDefault
+            );
         } else if (status_ == CollateralStatus.DISABLED) {
             _whenDefault = block.timestamp;
         }
