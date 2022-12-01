@@ -136,15 +136,14 @@ contract UniswapV2LPCollateral is ICollateral {
     /// @return {ref/tok} Quantity of whole reference units per whole collateral tokens
     function refPerTok() public view returns (uint192) {
         (uint112 reserves0, uint112 reserves1, ) = pair.getReserves();
-        uint192 invariant = shiftl_toFix(reserves0, -int8(token0decimals)).mul(
-            shiftl_toFix(reserves1, -int8(token1decimals))
-        );
-        uint256 sqrt = Math.sqrt(invariant);
-        return uint192(_divrnd(sqrt, pair.totalSupply(), FLOOR));
+        uint192 invariant = shiftl_toFix(reserves0, -int8(token0decimals)) *
+            shiftl_toFix(reserves1, -int8(token1decimals));
+        uint192 sqrt = _safeWrap(Math.sqrt(invariant));
+        return sqrt.div(_safeWrap(pair.totalSupply()));
     }
 
     /// @return {target/ref} Quantity of whole target units per whole reference unit in the peg
-    function targetPerRef() public view returns (uint192) {
+    function targetPerRef() public pure returns (uint192) {
         return FIX_ONE;
     }
 
@@ -187,7 +186,7 @@ contract UniswapV2LPCollateral is ICollateral {
     }
 
     function lpTokenPrice() public view returns (uint192) {
-        return _safeWrap((totalLiquidity() * FIX_SCALE) / pair.totalSupply());
+        return totalLiquidity() / uint192(pair.totalSupply());
     }
 
     function markStatus(CollateralStatus status_) internal {
