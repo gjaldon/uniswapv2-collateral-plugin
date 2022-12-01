@@ -111,7 +111,7 @@ contract UniswapV2LPCollateral is ICollateral {
     }
 
     function strictPrice() public view returns (uint192) {
-        return lpTokenPrice().mul(refPerTok());
+        return totalLiquidity().div(_safeWrap(pair.totalSupply()));
     }
 
     /// Can return 0
@@ -178,10 +178,6 @@ contract UniswapV2LPCollateral is ICollateral {
         );
 
         return totalReserves0price.plus(totalReserves1price);
-    }
-
-    function lpTokenPrice() public view returns (uint192) {
-        return totalLiquidity().div(uint192(pair.totalSupply()));
     }
 
     function markStatus(CollateralStatus status_) internal {
