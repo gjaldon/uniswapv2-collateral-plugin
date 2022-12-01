@@ -15,6 +15,7 @@ export const WBTC = '0x2260FAC5E5542a773Aa44fBCfeDf7C193bc2C599'
 export const UNISWAP_ROUTER = '0x7a250d5630B4cF539739dF2C5dAcb4c659F2488D'
 
 export const WBTC_ETH_HOLDER = '0xe8e5f5c4eb430c517c5f266ef9d18994321f1521'
+export const WBTC_HOLDER = '0xbf72da2bd84c5170618fbe5914b0eca9638d5eb5'
 
 export const ORACLE_TIMEOUT = 86400n // 24 hours in seconds
 export const DEFAULT_THRESHOLD = 5n * 10n ** 16n // 0.05
@@ -58,4 +59,23 @@ export const whileImpersonating = async (address: string, f: ImpersonationFuncti
   const signer = await ethers.getImpersonatedSigner(address)
 
   await f(signer)
+}
+
+export const allocateERC20 = async (
+  tokenAddr: string,
+  from: string,
+  to: string,
+  balance: Numeric
+) => {
+  if (typeof balance === 'number') {
+    balance = BigInt(balance)
+  }
+
+  const token = await ethers.getContractAt('ERC20Mock', tokenAddr)
+  console.log('TOKEN MOCK')
+
+  await whileImpersonating(from, async (signer) => {
+    console.log(await token.balanceOf(signer.address))
+    await token.connect(signer).transfer(to, balance)
+  })
 }

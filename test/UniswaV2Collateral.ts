@@ -1,5 +1,5 @@
 import { expect } from 'chai'
-import { ethers } from 'hardhat'
+import hre, { ethers } from 'hardhat'
 import { deployCollateral } from './fixtures'
 import {
   USDC_ETH_PAIR,
@@ -7,10 +7,12 @@ import {
   WBTC,
   WETH,
   WBTC_ETH_PAIR,
+  WBTC_HOLDER,
   exp,
   UNISWAP_ROUTER,
   WBTC_ETH_HOLDER,
   whileImpersonating,
+  allocateERC20,
 } from './helpers'
 
 describe('UniswapV2Collateral', () => {
@@ -43,6 +45,7 @@ describe('UniswapV2Collateral', () => {
   })
 
   describe('refPerTok', () => {
+    // Swaps and huge swings on liquidity should not decrease refPerTok
     it('is mostly increasing', async () => {
       const collateral = await deployCollateral()
       let prevRefPerTok = await collateral.refPerTok()
@@ -66,7 +69,6 @@ describe('UniswapV2Collateral', () => {
 
       let newRefPerTok = await collateral.refPerTok()
       expect(prevRefPerTok).to.be.lt(newRefPerTok)
-
       prevRefPerTok = newRefPerTok
 
       // Remove 21% of Liquidity. WBTC_ETH_HOLDER ~21% of the supply of WBTC-ETH LP token
@@ -87,6 +89,55 @@ describe('UniswapV2Collateral', () => {
             )
         ).to.changeTokenBalance(wbtcEthLp, WBTC_ETH_HOLDER, '-1385599119907813')
       })
+
+      newRefPerTok = await collateral.refPerTok()
+      expect(prevRefPerTok).to.be.lt(newRefPerTok)
+      prevRefPerTok = newRefPerTok
+
+      // Add huge liquidity that will make up ~94% of the LP's liquidity
+      await hre.network.provider.request({
+        method: 'hardhat_setBalance',
+        params: [
+          swapper.address,
+          '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
+        ],
+      })
+
+      await allocateERC20(WBTC, WBTC_HOLDER, swapper.address, exp(3000, 8))
+      await wbtc.approve(uniswapRouter.address, ethers.constants.MaxUint256)
+
+      await expect(
+        uniswapRouter.addLiquidityETH(
+          WBTC,
+          exp(3_000, 8),
+          0,
+          0,
+          swapper.address,
+          ethers.constants.MaxUint256,
+          {
+            value: exp(100_000, 18),
+          }
+        )
+      ).to.changeTokenBalance(wbtc, swapper.address, `-${exp(3_000, 8)}`)
+
+      newRefPerTok = await collateral.refPerTok()
+      expect(prevRefPerTok).to.be.lt(newRefPerTok)
+      prevRefPerTok = newRefPerTok
+
+      // Remove ~94% of liquidity
+      const balance = await wbtcEthLp.balanceOf(swapper.address)
+      await wbtcEthLp.approve(uniswapRouter.address, ethers.constants.MaxUint256)
+      await expect(
+        uniswapRouter.removeLiquidity(
+          WBTC,
+          WETH,
+          balance,
+          0,
+          0,
+          swapper.address,
+          ethers.constants.MaxUint256
+        )
+      ).to.changeTokenBalance(wbtcEthLp, swapper.address, '-92509713574577611')
 
       newRefPerTok = await collateral.refPerTok()
       expect(prevRefPerTok).to.be.lt(newRefPerTok)
