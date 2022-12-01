@@ -72,10 +72,7 @@ export const allocateERC20 = async (
   }
 
   const token = await ethers.getContractAt('ERC20Mock', tokenAddr)
-  console.log('TOKEN MOCK')
-
   await whileImpersonating(from, async (signer) => {
-    console.log(await token.balanceOf(signer.address))
     await token.connect(signer).transfer(to, balance)
   })
 }

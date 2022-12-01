@@ -26,6 +26,7 @@ describe('UniswapV2Collateral', () => {
         pair: USDC_ETH_PAIR,
         token0priceFeed: USDC_USD_FEED,
       })
+
       // Should equal $84,634,138.11 which is total liquidity of WBTC-ETH pair
       expect(await collateralB.totalLiquidity()).to.eq(84634138115718441828431798n)
     })
@@ -34,13 +35,15 @@ describe('UniswapV2Collateral', () => {
   describe('lpTokenPrice', () => {
     it('returns price per LP Token', async () => {
       const collateralA = await deployCollateral()
-      expect(await collateralA.lpTokenPrice()).to.eq(1103289836n)
+      // Price per LP Token in USD is roughly at $1,103,289.84. Can be verified by
+      // dividing Value by Quantity of holdings here https://etherscan.io/token/0xbb2b8038a1640196fbe3e38816f3e67cba72d940#balances.
+      expect(await collateralA.lpTokenPrice()).to.eq(1103289836056149272433109473n)
 
       const collateralB = await deployCollateral({
         pair: USDC_ETH_PAIR,
         token0priceFeed: USDC_USD_FEED,
       })
-      expect(await collateralB.lpTokenPrice()).to.eq(146456739n)
+      expect(await collateralB.lpTokenPrice()).to.eq(146456739000923443614846591n)
     })
   })
 

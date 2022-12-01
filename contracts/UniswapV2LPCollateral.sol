@@ -92,11 +92,6 @@ contract UniswapV2LPCollateral is ICollateral {
         reservesThresholdDisabled = config.reservesThresholdDisabled;
     }
 
-    // solhint-disable-next-line no-empty-blocks
-
-    /// VERY IMPORTANT: In any valid implemntation, status() MUST become DISABLED in refresh() if
-    /// refPerTok() has ever decreased since the last refresh() call!
-    /// (In this base class, refPerTok() is constant, so this is trivially satisfied.)
     function refresh() external {
         if (alreadyDefaulted()) return;
 
@@ -186,7 +181,7 @@ contract UniswapV2LPCollateral is ICollateral {
     }
 
     function lpTokenPrice() public view returns (uint192) {
-        return totalLiquidity() / uint192(pair.totalSupply());
+        return totalLiquidity().div(uint192(pair.totalSupply()));
     }
 
     function markStatus(CollateralStatus status_) internal {
