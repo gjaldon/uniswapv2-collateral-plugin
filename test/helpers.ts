@@ -25,6 +25,12 @@ export const MAX_TRADE_VOL = 1000000n
 
 export const FIX_ONE = 1n * 10n ** 18n
 
+export enum CollateralStatus {
+  SOUND,
+  IFFY,
+  DISABLED,
+}
+
 export type Numeric = number | bigint
 
 export const exp = (i: Numeric, d: Numeric = 0): bigint => {
