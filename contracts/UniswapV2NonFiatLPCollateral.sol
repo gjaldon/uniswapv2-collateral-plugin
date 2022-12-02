@@ -8,12 +8,11 @@ import "reserve/contracts/plugins/assets/OracleLib.sol";
 import "reserve/contracts/libraries/Fixed.sol";
 import "./ICollateral.sol";
 import "./IUniswapV2Pair.sol";
-import "hardhat/console.sol";
 
 /**
- * @title UniswapV2LPCollateral
+ * @title UniswapV2NonFiatLPCollateral
  */
-contract UniswapV2LPCollateral is ICollateral {
+contract UniswapV2NonFiatLPCollateral is ICollateral {
     using OracleLib for AggregatorV3Interface;
     using FixLib for uint192;
 
@@ -27,8 +26,6 @@ contract UniswapV2LPCollateral is ICollateral {
         uint192 maxTradeVolume;
         uint192 defaultThreshold;
         uint256 delayUntilDefault;
-        uint256 reservesThresholdIffy;
-        uint256 reservesThresholdDisabled;
     }
 
     AggregatorV3Interface public immutable token0priceFeed;
@@ -47,8 +44,6 @@ contract UniswapV2LPCollateral is ICollateral {
     uint192 public prevReferencePrice; // previous rate, {collateral/reference}
 
     uint256 public immutable delayUntilDefault; // {s} e.g 86400
-    uint256 public immutable reservesThresholdIffy;
-    uint256 public immutable reservesThresholdDisabled;
 
     uint256 private constant NEVER = type(uint256).max;
     uint256 private _whenDefault = NEVER;
@@ -65,8 +60,6 @@ contract UniswapV2LPCollateral is ICollateral {
         require(config.defaultThreshold > 0, "defaultThreshold zero");
         require(config.targetName != bytes32(0), "targetName missing");
         require(config.delayUntilDefault > 0, "delayUntilDefault zero");
-        require(config.reservesThresholdIffy > 0, "reservesThresholdIffy zero");
-        require(config.reservesThresholdDisabled > 0, "reservesThresholdDisabled zero");
 
         targetName = config.targetName;
         delayUntilDefault = config.delayUntilDefault;
@@ -82,26 +75,29 @@ contract UniswapV2LPCollateral is ICollateral {
         oracleTimeout = config.oracleTimeout;
         defaultThreshold = config.defaultThreshold;
         prevReferencePrice = refPerTok();
-        reservesThresholdIffy = config.reservesThresholdIffy;
-        reservesThresholdDisabled = config.reservesThresholdDisabled;
     }
 
+    /// Refresh exchange rates and update default status.
+    /// @custom:interaction RCEI
     function refresh() external {
+        // == Refresh ==
         if (alreadyDefaulted()) return;
-
         CollateralStatus oldStatus = status();
-        try this.strictPrice() returns (uint192) {
-            markStatus(CollateralStatus.SOUND);
-        } catch (bytes memory errData) {
-            // see: docs/solidity-style.md#Catching-Empty-Data
-            if (errData.length == 0) revert(); // solhint-disable-line reason-string
-            markStatus(CollateralStatus.IFFY);
+
+        // Check for hard default
+        uint192 referencePrice = refPerTok();
+
+        if (referencePrice < prevReferencePrice) {
+            markStatus(CollateralStatus.DISABLED);
         }
+        prevReferencePrice = referencePrice;
 
         CollateralStatus newStatus = status();
         if (oldStatus != newStatus) {
             emit DefaultStatusChanged(oldStatus, newStatus);
         }
+
+        // No interactions beyond the initial refresher
     }
 
     function strictPrice() public view returns (uint192) {

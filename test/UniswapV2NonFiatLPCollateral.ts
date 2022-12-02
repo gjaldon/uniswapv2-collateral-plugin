@@ -62,18 +62,6 @@ describe('UniswapV2Collateral', () => {
         'delayUntilDefault zero'
       )
     })
-
-    it('does not allow 0 reservesThresholdIffy', async () => {
-      await expect(deployCollateral({ reservesThresholdIffy: 0n })).to.be.revertedWith(
-        'reservesThresholdIffy zero'
-      )
-    })
-
-    it('does not allow 0 reservesThresholdDisabled', async () => {
-      await expect(deployCollateral({ reservesThresholdDisabled: 0n })).to.be.revertedWith(
-        'reservesThresholdDisabled zero'
-      )
-    })
   })
 
   describe('totalLiquidity', () => {

@@ -42,8 +42,8 @@ import {
   FacadeTest,
   ERC20Mock,
   Asset,
-  UniswapV2LPCollateral,
-  UniswapV2LPCollateral__factory,
+  UniswapV2NonFiatLPCollateral,
+  UniswapV2NonFiatLPCollateral__factory,
 } from '../typechain-types'
 
 const RSR_PRICE_FEED = '0x759bBC1be8F90eE6457C44abc7d443842a976d02'
@@ -294,32 +294,28 @@ interface CollateralOpts {
   maxTradeVolume?: bigint
   defaultThreshold?: bigint
   delayUntilDefault?: bigint
-  reservesThresholdIffy?: bigint
-  reservesThresholdDisabled?: bigint
 }
 
-const defaultOpts: UniswapV2LPCollateral.ConfigurationStruct = {
+const defaultOpts: UniswapV2NonFiatLPCollateral.ConfigurationStruct = {
   pair: WBTC_ETH_PAIR,
   token0priceFeed: BTC_USD_FEED,
   token1priceFeed: ETH_USD_FEED,
-  targetName: ethers.utils.formatBytes32String('USD'),
+  targetName: ethers.utils.formatBytes32String('UNIV2SQRTBTCETH'),
   oracleTimeout: ORACLE_TIMEOUT,
   fallbackPrice: FIX_ONE,
   maxTradeVolume: MAX_TRADE_VOL,
   defaultThreshold: DEFAULT_THRESHOLD,
   delayUntilDefault: DELAY_UNTIL_DEFAULT,
-  reservesThresholdIffy: 10000n,
-  reservesThresholdDisabled: 5000n,
 }
 
 export const deployCollateral = async (
   opts: CollateralOpts = {}
-): Promise<UniswapV2LPCollateral> => {
+): Promise<UniswapV2NonFiatLPCollateral> => {
   const newOpts = { ...defaultOpts, ...opts }
 
-  const UniswapV2CollateralFactory = <UniswapV2LPCollateral__factory>(
-    await ethers.getContractFactory('UniswapV2LPCollateral')
+  const UniswapV2CollateralFactory = <UniswapV2NonFiatLPCollateral__factory>(
+    await ethers.getContractFactory('UniswapV2NonFiatLPCollateral')
   )
 
-  return <UniswapV2LPCollateral>await UniswapV2CollateralFactory.deploy(newOpts)
+  return <UniswapV2NonFiatLPCollateral>await UniswapV2CollateralFactory.deploy(newOpts)
 }
