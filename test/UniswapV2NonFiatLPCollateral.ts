@@ -171,11 +171,35 @@ describe('UniswapV2Collateral', () => {
       expect(prevPrice).to.be.gt(newPrice)
     })
 
-    it('reverts if price is zero', async () => {
+    it('reverts if token0 price is zero', async () => {
       const MockV3AggregatorFactory = await ethers.getContractFactory('MockV3Aggregator')
       const chainlinkFeed = await MockV3AggregatorFactory.deploy(6, exp(1, 6))
       const collateral = await deployCollateral({
         token0priceFeeds: [chainlinkFeed.address],
+      })
+
+      // Set price of USDC to 0
+      const updateAnswerTx = await chainlinkFeed.updateAnswer(0)
+      await updateAnswerTx.wait()
+      // Check price of token
+      await expect(collateral.strictPrice()).to.be.revertedWithCustomError(
+        collateral,
+        'PriceOutsideRange'
+      )
+      // Fallback price is returned
+      const [isFallback, price] = await collateral.price(true)
+      expect(isFallback).to.equal(true)
+      expect(price).to.equal(await collateral.fallbackPrice())
+      // When refreshed, sets status to Unpriced
+      await collateral.refresh()
+      expect(await collateral.status()).to.equal(CollateralStatus.IFFY)
+    })
+
+    it('reverts if token1 price is zero', async () => {
+      const MockV3AggregatorFactory = await ethers.getContractFactory('MockV3Aggregator')
+      const chainlinkFeed = await MockV3AggregatorFactory.deploy(6, exp(1, 6))
+      const collateral = await deployCollateral({
+        token1priceFeeds: [chainlinkFeed.address],
       })
 
       // Set price of USDC to 0
@@ -276,7 +300,7 @@ describe('UniswapV2Collateral', () => {
           ethers.constants.MaxUint256,
           { value: ethers.utils.parseUnits('100', 'ether') }
         )
-      ).to.changeTokenBalance(wbtc, swapper.address, 709234160)
+      ).to.changeEtherBalance(swapper.address, `-${exp(100, 18)}`)
 
       let newRefPerTok = await collateral.refPerTok()
       expect(prevRefPerTok).to.be.lt(newRefPerTok)
@@ -298,7 +322,7 @@ describe('UniswapV2Collateral', () => {
               swapper.address,
               ethers.constants.MaxUint256
             )
-        ).to.changeTokenBalance(wbtcEthLp, WBTC_ETH_HOLDER, '-1385599119907813')
+        ).to.changeTokenBalance(wbtcEthLp, WBTC_ETH_HOLDER, `-${balance}`)
       })
 
       newRefPerTok = await collateral.refPerTok()
@@ -348,7 +372,7 @@ describe('UniswapV2Collateral', () => {
           swapper.address,
           ethers.constants.MaxUint256
         )
-      ).to.changeTokenBalance(wbtcEthLp, swapper.address, '-92509713574577611')
+      ).to.changeTokenBalance(wbtcEthLp, swapper.address, `-${balance}`)
 
       newRefPerTok = await collateral.refPerTok()
       expect(prevRefPerTok).to.be.lt(newRefPerTok)
