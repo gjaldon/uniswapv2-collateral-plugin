@@ -50,22 +50,16 @@ contract UniswapV2LPCollateral is ICollateral {
     uint256 public immutable reservesThresholdIffy;
     uint256 public immutable reservesThresholdDisabled;
 
-    // Default Status:
-    // _whenDefault == NEVER: no risk of default (initial value)
-    // _whenDefault > block.timestamp: delayed default may occur as soon as block.timestamp.
-    //                In this case, the asset may recover, reachiving _whenDefault == NEVER.
-    // _whenDefault <= block.timestamp: default has already happened (permanently)
     uint256 private constant NEVER = type(uint256).max;
     uint256 private _whenDefault = NEVER;
 
-    // targetName: The canonical name of this collateral's target unit.
     bytes32 public immutable targetName;
 
     constructor(Configuration memory config) {
         require(config.fallbackPrice > 0, "fallback price zero");
         require(address(config.pair) != address(0), "missing pair address");
-        require(address(config.token0priceFeed) != address(0), "missing chainlink feed");
-        require(address(config.token1priceFeed) != address(0), "missing chainlink feed");
+        require(address(config.token0priceFeed) != address(0), "missing token0 price feed");
+        require(address(config.token1priceFeed) != address(0), "missing token1 price feed");
         require(config.maxTradeVolume > 0, "invalid max trade volume");
         require(config.oracleTimeout > 0, "oracleTimeout zero");
         require(config.defaultThreshold > 0, "defaultThreshold zero");

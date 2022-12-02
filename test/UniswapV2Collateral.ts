@@ -16,6 +16,66 @@ import {
 } from './helpers'
 
 describe('UniswapV2Collateral', () => {
+  describe('constructor validation', () => {
+    it('validates targetName', async () => {
+      await expect(deployCollateral({ targetName: ethers.constants.HashZero })).to.be.revertedWith(
+        'targetName missing'
+      )
+    })
+
+    it('does not allow missing pair address', async () => {
+      await expect(deployCollateral({ pair: ethers.constants.AddressZero })).to.be.revertedWith(
+        'missing pair address'
+      )
+    })
+
+    it('does not allow missing token0priceFeed', async () => {
+      await expect(
+        deployCollateral({ token0priceFeed: ethers.constants.AddressZero })
+      ).to.be.revertedWith('missing token0 price feed')
+    })
+
+    it('does not allow missing token1priceFeed', async () => {
+      await expect(
+        deployCollateral({ token1priceFeed: ethers.constants.AddressZero })
+      ).to.be.revertedWith('missing token1 price feed')
+    })
+
+    it('max trade volume must be greater than zero', async () => {
+      await expect(deployCollateral({ maxTradeVolume: 0n })).to.be.revertedWith(
+        'invalid max trade volume'
+      )
+    })
+
+    it('does not allow oracle timeout at 0', async () => {
+      await expect(deployCollateral({ oracleTimeout: 0n })).to.be.revertedWith('oracleTimeout zero')
+    })
+
+    it('does not allow missing defaultThreshold', async () => {
+      await expect(deployCollateral({ defaultThreshold: 0n })).to.be.revertedWith(
+        'defaultThreshold zero'
+      )
+    })
+
+    it('does not allow missing delayUntilDefault', async () => {
+      await expect(deployCollateral({ delayUntilDefault: 0n })).to.be.revertedWith(
+        'delayUntilDefault zero'
+      )
+    })
+
+    it('does not allow 0 reservesThresholdIffy', async () => {
+      await expect(deployCollateral({ reservesThresholdIffy: 0n })).to.be.revertedWith(
+        'reservesThresholdIffy zero'
+      )
+    })
+
+    it('does not allow 0 reservesThresholdDisabled', async () => {
+      await expect(deployCollateral({ reservesThresholdDisabled: 0n })).to.be.revertedWith(
+        'reservesThresholdDisabled zero'
+      )
+    })
+  })
+
   describe('totalLiquidity', () => {
     it('returns value of total liquidity of the pair', async () => {
       const collateralA = await deployCollateral()
