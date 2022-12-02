@@ -112,44 +112,60 @@ describe('UniswapV2Collateral', () => {
     })
 
     it('price changes as ETH and BTC prices change', async () => {
-      // const { collateral, chainlinkFeed } = await loadFixture(makeCollateral())
-      // const { answer } = await chainlinkFeed.latestRoundData()
-      // const decimals = await chainlinkFeed.decimals()
-      // const expectedPrice = exp(answer.toBigInt(), 18 - decimals)
-      // // Check initial prices
-      // expect(await collateral.strictPrice()).to.equal(expectedPrice)
-      // // Check refPerTok initial values
-      // const expectedRefPerTok = exp(1, 18)
-      // expect(await collateral.refPerTok()).to.equal(expectedRefPerTok) // should equal 1e18
-      // // Update values in Oracles increase by 10-20%
-      // const newPrice = exp(11, 7)
-      // const updateAnswerTx = await chainlinkFeed.updateAnswer(newPrice)
-      // await updateAnswerTx.wait()
-      // // Check new prices
-      // expect(await collateral.strictPrice()).to.equal(exp(newPrice, 18 - decimals))
-      // // Check refPerTok remains the same
-      // expect(await collateral.refPerTok()).to.equal(expectedRefPerTok)
+      const collateral = await deployCollateral()
+      const [swapper] = await ethers.getSigners()
+      let prevPrice = await collateral.strictPrice()
+
+      const wbtc = await ethers.getContractAt('ERC20', WBTC)
+      const uniswapRouter = await ethers.getContractAt('UniswapV2Router02', UNISWAP_ROUTER)
+      await expect(
+        uniswapRouter.swapExactETHForTokens(
+          0,
+          [WETH, WBTC],
+          swapper.address,
+          ethers.constants.MaxUint256,
+          { value: ethers.utils.parseUnits('100', 'ether') }
+        )
+      ).to.changeEtherBalance(swapper.address, `-${exp(100, 18)}`)
+
+      expect(prevPrice).to.be.lt(await collateral.strictPrice())
     })
 
     it('price changes as swaps occur', async () => {
-      // const { collateral, usdc, cusdcV3, wcusdcV3 } = await loadFixture(makeCollateral())
-      // const prevRefPerTok = await collateral.refPerTok()
-      // const prevPrice = await collateral.strictPrice()
-      // expect(prevRefPerTok).to.equal(exp(1, 18))
-      // expect(prevPrice).to.equal(exp(1, 18))
-      // const [_, bob] = await ethers.getSigners()
-      // const usdcAsB = usdc.connect(bob)
-      // const cusdcV3AsB = cusdcV3.connect(bob)
-      // const wcusdcV3AsB = wcusdcV3.connect(bob)
-      // const balance = 20000e6
-      // await allocateUSDC(bob.address, balance)
-      // await usdcAsB.approve(cusdcV3.address, ethers.constants.MaxUint256)
-      // await cusdcV3AsB.supply(usdc.address, balance)
-      // expect(await usdc.balanceOf(bob.address)).to.equal(0)
-      // await cusdcV3AsB.allow(wcusdcV3.address, true)
-      // await wcusdcV3AsB.depositTo(bob.address, ethers.constants.MaxUint256)
-      // expect(await collateral.refPerTok()).to.not.equal(prevRefPerTok)
-      // expect(await collateral.strictPrice()).to.not.equal(prevPrice)
+      const collateral = await deployCollateral()
+      const [swapper] = await ethers.getSigners()
+      let prevPrice = await collateral.strictPrice()
+
+      const wbtc = await ethers.getContractAt('ERC20', WBTC)
+      const uniswapRouter = await ethers.getContractAt('UniswapV2Router02', UNISWAP_ROUTER)
+      await expect(
+        uniswapRouter.swapExactETHForTokens(
+          0,
+          [WETH, WBTC],
+          swapper.address,
+          ethers.constants.MaxUint256,
+          { value: ethers.utils.parseUnits('100', 'ether') }
+        )
+      ).to.changeEtherBalance(swapper.address, `-${exp(100, 18)}`)
+
+      let newPrice = await collateral.strictPrice()
+      expect(prevPrice).to.be.lt(newPrice)
+      prevPrice = newPrice
+
+      await wbtc.approve(uniswapRouter.address, ethers.constants.MaxUint256)
+      const wbtcBalance = await wbtc.balanceOf(swapper.address)
+      await expect(
+        uniswapRouter.swapExactTokensForETH(
+          wbtcBalance,
+          0,
+          [WBTC, WETH],
+          swapper.address,
+          ethers.constants.MaxUint256
+        )
+      ).to.changeTokenBalance(wbtc, swapper.address, `-${wbtcBalance}`)
+
+      newPrice = await collateral.strictPrice()
+      expect(prevPrice).to.be.gt(newPrice)
     })
 
     it('reverts if price is zero', async () => {
