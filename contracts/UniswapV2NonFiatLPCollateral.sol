@@ -8,6 +8,7 @@ import "reserve/contracts/plugins/assets/OracleLib.sol";
 import "reserve/contracts/libraries/Fixed.sol";
 import "./ICollateral.sol";
 import "./IUniswapV2Pair.sol";
+import "hardhat/console.sol";
 
 /**
  * @title UniswapV2NonFiatLPCollateral
@@ -18,8 +19,8 @@ contract UniswapV2NonFiatLPCollateral is ICollateral {
 
     struct Configuration {
         IUniswapV2Pair pair;
-        AggregatorV3Interface token0priceFeed;
-        AggregatorV3Interface token1priceFeed;
+        AggregatorV3Interface[] token0priceFeeds;
+        AggregatorV3Interface[] token1priceFeeds;
         bytes32 targetName;
         uint48 oracleTimeout;
         uint192 fallbackPrice;
@@ -28,8 +29,16 @@ contract UniswapV2NonFiatLPCollateral is ICollateral {
         uint256 delayUntilDefault;
     }
 
-    AggregatorV3Interface public immutable token0priceFeed;
-    AggregatorV3Interface public immutable token1priceFeed;
+    AggregatorV3Interface internal immutable _t0feed0;
+    AggregatorV3Interface internal immutable _t0feed1;
+    AggregatorV3Interface internal immutable _t0feed2;
+    AggregatorV3Interface internal immutable _t1feed0;
+    AggregatorV3Interface internal immutable _t1feed1;
+    AggregatorV3Interface internal immutable _t1feed2;
+
+    uint8 internal immutable _t0feedsLength;
+    uint8 internal immutable _t1feedsLength;
+
     IERC20Metadata public immutable erc20;
     IUniswapV2Pair public immutable pair;
 
@@ -53,8 +62,10 @@ contract UniswapV2NonFiatLPCollateral is ICollateral {
     constructor(Configuration memory config) {
         require(config.fallbackPrice > 0, "fallback price zero");
         require(address(config.pair) != address(0), "missing pair address");
-        require(address(config.token0priceFeed) != address(0), "missing token0 price feed");
-        require(address(config.token1priceFeed) != address(0), "missing token1 price feed");
+        require(config.token0priceFeeds.length > 0, "missing token0 price feed");
+        require(config.token1priceFeeds.length > 0, "missing token1 price feed");
+        require(config.token0priceFeeds.length <= 3, "token0 price feeds limited to 3");
+        require(config.token1priceFeeds.length <= 3, "token1 price feeds limited to 3");
         require(config.maxTradeVolume > 0, "invalid max trade volume");
         require(config.oracleTimeout > 0, "oracleTimeout zero");
         require(config.defaultThreshold > 0, "defaultThreshold zero");
@@ -65,8 +76,6 @@ contract UniswapV2NonFiatLPCollateral is ICollateral {
         delayUntilDefault = config.delayUntilDefault;
         pair = config.pair;
         fallbackPrice = config.fallbackPrice;
-        token0priceFeed = config.token0priceFeed;
-        token1priceFeed = config.token1priceFeed;
         erc20 = IERC20Metadata(address(config.pair));
         erc20Decimals = erc20.decimals();
         token0decimals = IERC20Metadata(address(pair.token0())).decimals();
@@ -75,6 +84,42 @@ contract UniswapV2NonFiatLPCollateral is ICollateral {
         oracleTimeout = config.oracleTimeout;
         defaultThreshold = config.defaultThreshold;
         prevReferencePrice = refPerTok();
+
+        // Solidity does not support immutable arrays. This is a hack to get the equivalent of
+        // an immutable array so we do not have store the token feeds in the blockchain. This is
+        // a gas optimization since it is significantly more expensive to read and write on the
+        // blockchain than it is to use embedded values in the bytecode.
+        _t0feedsLength = uint8(config.token0priceFeeds.length);
+        _t0feed0 = _t0feedsLength > 0
+            ? config.token0priceFeeds[0]
+            : AggregatorV3Interface(address(0));
+        _t0feed1 = _t0feedsLength > 1
+            ? config.token0priceFeeds[1]
+            : AggregatorV3Interface(address(0));
+        _t0feed2 = _t0feedsLength > 2
+            ? config.token0priceFeeds[2]
+            : AggregatorV3Interface(address(0));
+
+        require(
+            address(_t0feed0) != address(0),
+            "at least 1 token0 price feed must not be zero address"
+        );
+
+        _t1feedsLength = uint8(config.token1priceFeeds.length);
+        _t1feed0 = _t1feedsLength > 0
+            ? config.token1priceFeeds[0]
+            : AggregatorV3Interface(address(0));
+        _t1feed1 = _t1feedsLength > 1
+            ? config.token1priceFeeds[1]
+            : AggregatorV3Interface(address(0));
+        _t1feed2 = _t1feedsLength > 2
+            ? config.token1priceFeeds[2]
+            : AggregatorV3Interface(address(0));
+
+        require(
+            address(_t1feed0) != address(0),
+            "at least 1 token1 price feeds can not be zero address"
+        );
     }
 
     /// Refresh exchange rates and update default status.
@@ -159,15 +204,45 @@ contract UniswapV2NonFiatLPCollateral is ICollateral {
         (uint112 reserves0, uint112 reserves1, ) = pair.getReserves();
 
         uint192 totalReserves0price = shiftl_toFix(
-            token0priceFeed.price(oracleTimeout).mul(reserves0),
+            token0price().mul(reserves0),
             -int8(token0decimals)
         );
         uint192 totalReserves1price = shiftl_toFix(
-            token1priceFeed.price(oracleTimeout).mul(reserves1),
+            token1price().mul(reserves1),
             -int8(token1decimals)
         );
 
         return totalReserves0price.plus(totalReserves1price);
+    }
+
+    function token0price() public view returns (uint192) {
+        uint192 _price = FIX_ONE;
+        for (uint8 i = 0; i < _t0feedsLength; i++) {
+            _price = getToken0feed(i).price(oracleTimeout).mul(_price);
+        }
+        return _price;
+    }
+
+    function getToken0feed(uint8 index) public view returns (AggregatorV3Interface) {
+        require(index <= 2, "index must be 2 or less");
+        if (index == 0) return _t0feed0;
+        if (index == 1) return _t0feed1;
+        return _t0feed2;
+    }
+
+    function token1price() public view returns (uint192) {
+        uint192 _price = FIX_ONE;
+        for (uint8 i = 0; i < _t1feedsLength; i++) {
+            _price = getToken1feed(i).price(oracleTimeout).mul(_price);
+        }
+        return _price;
+    }
+
+    function getToken1feed(uint8 index) public view returns (AggregatorV3Interface) {
+        require(index <= 2, "index must be 2 or less");
+        if (index == 0) return _t1feed0;
+        if (index == 1) return _t1feed1;
+        return _t1feed2;
     }
 
     function markStatus(CollateralStatus status_) internal {

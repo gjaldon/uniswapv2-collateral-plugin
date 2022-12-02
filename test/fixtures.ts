@@ -7,6 +7,7 @@ import {
   ORACLE_TIMEOUT,
   FIX_ONE,
   WBTC_ETH_PAIR,
+  WBTC_BTC_FEED,
   BTC_USD_FEED,
   ETH_USD_FEED,
   DEFAULT_THRESHOLD,
@@ -286,8 +287,8 @@ export const makeReserveProtocol = async () => {
 
 interface CollateralOpts {
   pair?: string
-  token0priceFeed?: string
-  token1priceFeed?: string
+  token0priceFeeds?: string[]
+  token1priceFeeds?: string[]
   targetName?: string
   oracleTimeout?: bigint
   fallbackPrice?: bigint
@@ -298,8 +299,8 @@ interface CollateralOpts {
 
 const defaultOpts: UniswapV2NonFiatLPCollateral.ConfigurationStruct = {
   pair: WBTC_ETH_PAIR,
-  token0priceFeed: BTC_USD_FEED,
-  token1priceFeed: ETH_USD_FEED,
+  token0priceFeeds: [WBTC_BTC_FEED, BTC_USD_FEED],
+  token1priceFeeds: [ETH_USD_FEED],
   targetName: ethers.utils.formatBytes32String('UNIV2SQRTBTCETH'),
   oracleTimeout: ORACLE_TIMEOUT,
   fallbackPrice: FIX_ONE,

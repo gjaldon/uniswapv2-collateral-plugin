@@ -13,6 +13,7 @@ import {
   WBTC_ETH_HOLDER,
   whileImpersonating,
   allocateERC20,
+  WBTC_BTC_FEED,
 } from './helpers'
 
 describe('UniswapV2Collateral', () => {
@@ -29,16 +30,32 @@ describe('UniswapV2Collateral', () => {
       )
     })
 
-    it('does not allow missing token0priceFeed', async () => {
+    it('does not allow missing token0priceFeeds', async () => {
+      await expect(deployCollateral({ token0priceFeeds: [] })).to.be.revertedWith(
+        'missing token0 price feed'
+      )
+    })
+
+    it('does not allow more than 3 token0priceFeeds', async () => {
       await expect(
-        deployCollateral({ token0priceFeed: ethers.constants.AddressZero })
-      ).to.be.revertedWith('missing token0 price feed')
+        deployCollateral({
+          token0priceFeeds: [WBTC_BTC_FEED, WBTC_BTC_FEED, WBTC_BTC_FEED, WBTC_BTC_FEED],
+        })
+      ).to.be.revertedWith('token0 price feeds limited to 3')
     })
 
     it('does not allow missing token1priceFeed', async () => {
+      await expect(deployCollateral({ token1priceFeeds: [] })).to.be.revertedWith(
+        'missing token1 price feed'
+      )
+    })
+
+    it('does not allow more than 3 token1priceFeeds', async () => {
       await expect(
-        deployCollateral({ token1priceFeed: ethers.constants.AddressZero })
-      ).to.be.revertedWith('missing token1 price feed')
+        deployCollateral({
+          token1priceFeeds: [WBTC_BTC_FEED, WBTC_BTC_FEED, WBTC_BTC_FEED, WBTC_BTC_FEED],
+        })
+      ).to.be.revertedWith('token1 price feeds limited to 3')
     })
 
     it('max trade volume must be greater than zero', async () => {
@@ -68,11 +85,11 @@ describe('UniswapV2Collateral', () => {
     it('returns value of total liquidity of the pair', async () => {
       const collateralA = await deployCollateral()
       // Should equal $7,184,249.72 which is total liquidity of WBTC-ETH pair
-      expect(await collateralA.totalLiquidity()).to.eq(7184249723972242054325288n)
+      expect(await collateralA.totalLiquidity()).to.eq(7171099424319952054325288n)
 
       const collateralB = await deployCollateral({
         pair: USDC_ETH_PAIR,
-        token0priceFeed: USDC_USD_FEED,
+        token0priceFeeds: [USDC_USD_FEED],
       })
 
       // Should equal $84,634,138.11 which is total liquidity of WBTC-ETH pair
@@ -80,18 +97,87 @@ describe('UniswapV2Collateral', () => {
     })
   })
 
-  describe('strictPrice', () => {
+  describe('prices', () => {
     it('returns price per LP Token', async () => {
       const collateralA = await deployCollateral()
       // Price per LP Token in USD is roughly at $1,103,289.84. Can be verified by
       // dividing Value by Quantity of holdings here https://etherscan.io/token/0xbb2b8038a1640196fbe3e38816f3e67cba72d940#balances.
-      expect(await collateralA.strictPrice()).to.eq(1103289836056149272433109473n)
+      expect(await collateralA.strictPrice()).to.eq(1101270336107664418226494539n)
 
       const collateralB = await deployCollateral({
         pair: USDC_ETH_PAIR,
-        token0priceFeed: USDC_USD_FEED,
+        token0priceFeeds: [USDC_USD_FEED],
       })
       expect(await collateralB.strictPrice()).to.eq(146456739000923443614846591n)
+    })
+
+    it('price changes as ETH and BTC prices change', async () => {
+      // const { collateral, chainlinkFeed } = await loadFixture(makeCollateral())
+      // const { answer } = await chainlinkFeed.latestRoundData()
+      // const decimals = await chainlinkFeed.decimals()
+      // const expectedPrice = exp(answer.toBigInt(), 18 - decimals)
+      // // Check initial prices
+      // expect(await collateral.strictPrice()).to.equal(expectedPrice)
+      // // Check refPerTok initial values
+      // const expectedRefPerTok = exp(1, 18)
+      // expect(await collateral.refPerTok()).to.equal(expectedRefPerTok) // should equal 1e18
+      // // Update values in Oracles increase by 10-20%
+      // const newPrice = exp(11, 7)
+      // const updateAnswerTx = await chainlinkFeed.updateAnswer(newPrice)
+      // await updateAnswerTx.wait()
+      // // Check new prices
+      // expect(await collateral.strictPrice()).to.equal(exp(newPrice, 18 - decimals))
+      // // Check refPerTok remains the same
+      // expect(await collateral.refPerTok()).to.equal(expectedRefPerTok)
+    })
+
+    it('price changes as swaps occur', async () => {
+      // const { collateral, usdc, cusdcV3, wcusdcV3 } = await loadFixture(makeCollateral())
+      // const prevRefPerTok = await collateral.refPerTok()
+      // const prevPrice = await collateral.strictPrice()
+      // expect(prevRefPerTok).to.equal(exp(1, 18))
+      // expect(prevPrice).to.equal(exp(1, 18))
+      // const [_, bob] = await ethers.getSigners()
+      // const usdcAsB = usdc.connect(bob)
+      // const cusdcV3AsB = cusdcV3.connect(bob)
+      // const wcusdcV3AsB = wcusdcV3.connect(bob)
+      // const balance = 20000e6
+      // await allocateUSDC(bob.address, balance)
+      // await usdcAsB.approve(cusdcV3.address, ethers.constants.MaxUint256)
+      // await cusdcV3AsB.supply(usdc.address, balance)
+      // expect(await usdc.balanceOf(bob.address)).to.equal(0)
+      // await cusdcV3AsB.allow(wcusdcV3.address, true)
+      // await wcusdcV3AsB.depositTo(bob.address, ethers.constants.MaxUint256)
+      // expect(await collateral.refPerTok()).to.not.equal(prevRefPerTok)
+      // expect(await collateral.strictPrice()).to.not.equal(prevPrice)
+    })
+
+    it('reverts if price is zero', async () => {
+      //   const { collateral, chainlinkFeed } = await loadFixture(makeCollateral())
+      //   // Set price of USDC to 0
+      //   const updateAnswerTx = await chainlinkFeed.updateAnswer(0)
+      //   await updateAnswerTx.wait()
+      //   // Check price of token
+      //   await expect(collateral.strictPrice()).to.be.revertedWithCustomError(
+      //     collateral,
+      //     'PriceOutsideRange'
+      //   )
+      //   // Fallback price is returned
+      //   const [isFallback, price] = await collateral.price(true)
+      //   expect(isFallback).to.equal(true)
+      //   expect(price).to.equal(await collateral.fallbackPrice())
+      //   // When refreshed, sets status to Unpriced
+      //   await collateral.refresh()
+      //   expect(await collateral.status()).to.equal(CollateralStatus.IFFY)
+      // })
+      // it('reverts in case of invalid timestamp', async () => {
+      //   const { collateral, chainlinkFeed } = await loadFixture(makeCollateral())
+      //   await chainlinkFeed.setInvalidTimestamp()
+      //   // Check price of token
+      //   await expect(collateral.strictPrice()).to.be.revertedWithCustomError(collateral, 'StalePrice')
+      //   // When refreshed, sets status to Unpriced
+      //   await collateral.refresh()
+      //   expect(await collateral.status()).to.equal(CollateralStatus.IFFY)
     })
   })
 
