@@ -1,4 +1,5 @@
 import { expect } from 'chai'
+import { time } from '@nomicfoundation/hardhat-network-helpers'
 import hre, { ethers } from 'hardhat'
 import { deployCollateral } from './fixtures'
 import {
@@ -206,6 +207,51 @@ describe('UniswapV2Collateral', () => {
       // When refreshed, sets status to Unpriced
       await collateral.refresh()
       expect(await collateral.status()).to.equal(CollateralStatus.IFFY)
+    })
+  })
+
+  describe('status', () => {
+    it('maintains status in normal situations', async () => {
+      const collateral = await deployCollateral()
+      // Check initial state
+      expect(await collateral.status()).to.equal(CollateralStatus.SOUND)
+      expect(await collateral.whenDefault()).to.equal(ethers.constants.MaxUint256)
+
+      // Force updates (with no changes)
+      await expect(collateral.refresh()).to.not.emit(collateral, 'DefaultStatusChanged')
+
+      // State remains the same
+      expect(await collateral.status()).to.equal(CollateralStatus.SOUND)
+      expect(await collateral.whenDefault()).to.equal(ethers.constants.MaxUint256)
+    })
+
+    it('hard-defaults when refPerTok() decreases', async () => {
+      const PairMockFactory = await ethers.getContractFactory('PairMock')
+      const pairMock = await PairMockFactory.deploy(
+        WBTC,
+        WETH,
+        exp(10_000, 8),
+        exp(10_000, 18),
+        exp(1_000, 18)
+      )
+      const collateral = await deployCollateral({ pair: pairMock.address })
+
+      // Check initial state
+      expect(await collateral.status()).to.equal(CollateralStatus.SOUND)
+      expect(await collateral.whenDefault()).to.equal(ethers.constants.MaxUint256)
+
+      await expect(collateral.refresh()).to.not.emit(collateral, 'DefaultStatusChanged')
+      // State remains the same
+      expect(await collateral.status()).to.equal(CollateralStatus.SOUND)
+      expect(await collateral.whenDefault()).to.equal(ethers.constants.MaxUint256)
+
+      // Set reserves to 0
+      await pairMock.setReserves(0, 0)
+
+      // Collateral defaults due to refPerTok() going down
+      await expect(collateral.refresh()).to.emit(collateral, 'DefaultStatusChanged')
+      expect(await collateral.status()).to.equal(CollateralStatus.DISABLED)
+      expect(await collateral.whenDefault()).to.equal(await time.latest())
     })
   })
 
