@@ -250,7 +250,7 @@ export const makeReserveProtocol = async () => {
     await ethers.getContractAt('RTokenAsset', await assetRegistry.toAsset(rToken.address))
   )
 
-  const { collateral, chainlinkFeed, cusdcV3, wcusdcV3, usdc } = await makeCollateral()()
+  const collateral = await deployCollateral()
 
   // Register an Asset and a Collateral
   await assetRegistry.connect(owner).register(compAsset.address)
@@ -265,12 +265,9 @@ export const makeReserveProtocol = async () => {
   await backingManager.grantRTokenAllowance(collateralERC20)
 
   return {
-    wcusdcV3,
-    usdc,
     assetRegistry,
     basketHandler,
     collateral,
-    chainlinkFeed,
     rTokenAsset,
     facade,
     rToken,
@@ -279,7 +276,6 @@ export const makeReserveProtocol = async () => {
     rsr,
     compToken,
     facadeTest,
-    cusdcV3,
     backingManager,
     main,
   }
