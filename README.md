@@ -34,8 +34,7 @@ The collateral becomes iffy in the following scenarios:
 
 ### Deployment
 
-This comes with a [deploy script](scripts/deploy.ts) and [configuration](scripts/configuration.ts). It is already fully configured for deployment
-to Mainnet and Goerli for WBTC-ETH pair. You may optionally set `oracleLib` if you want to use existing deployments for OracleLib.
+This comes with a [deploy script](scripts/non-fiat/deploy.ts) and [configuration](scripts/non-fiat/configuration.ts). It is already fully configured for deployment to Mainnet for WBTC-ETH pair. You may optionally set `oracleLib` if you want to use existing deployments for OracleLib.
 
 ## Implementation for Fiat LP Collateral
 
@@ -65,8 +64,7 @@ The collateral becomes iffy in the following scenarios:
 
 ### Deployment
 
-This comes with a [deploy script](scripts/deploy.ts) and [configuration](scripts/configuration.ts). It is already fully configured for deployment
-to Mainnet and Goerli for DAI-USDC pair. You may optionally set `oracleLib` if you want to use existing deployments for OracleLib.
+This comes with a [deploy script](scripts/fiat/deploy.ts) and [configuration](scripts/fiat/configuration.ts). It is already fully configured for deployment to Mainnet for DAI-USDC pair. You may optionally set `oracleLib` if you want to use existing deployments for OracleLib.
 
 ### Social Media
 
