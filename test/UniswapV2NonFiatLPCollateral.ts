@@ -466,7 +466,7 @@ describe('integration with reserve protocol', () => {
       const balance = await wbtcEthLp.balanceOf(signer.address)
       await wbtcEthLp.connect(signer).transfer(bob.address, balance)
     })
-    const issueAmount = exp(100, 10)
+    const issueAmount = exp(1, 18)
     await wbtcEthLp.approve(rToken.address, ethers.constants.MaxUint256)
     expect(await rToken.issue(issueAmount)).to.emit(rToken, 'Issuance')
     expect(await rToken.balanceOf(bob.address)).to.equal(issueAmount)
@@ -474,78 +474,52 @@ describe('integration with reserve protocol', () => {
     expect(await rTokenAsset.strictPrice()).eq(price)
   })
 
-  // it('issues/reedems with simple basket', async function () {
-  //   const { cusdcV3, usdc, rToken, facadeTest, backingManager, wcusdcV3 } =
-  //     await makeReserveProtocol()
-  //   const [_, bob] = await ethers.getSigners()
+  it('issues/reedems with simple basket', async function () {
+    const { rToken, collateral, facadeTest, backingManager, basketHandler } =
+      await makeReserveProtocol()
+    const [bob] = await ethers.getSigners()
 
-  //   // Check balances before
-  //   expect(await wcusdcV3.balanceOf(backingManager.address)).to.equal(0)
+    const wbtcEthLp = await ethers.getContractAt('UniswapV2Pair', WBTC_ETH_PAIR)
 
-  //   const issueAmount = exp(10000, 18)
-  //   const initialBal = exp(20000, 6)
-  //   const usdcAsB = usdc.connect(bob)
-  //   const cusdcV3AsB = cusdcV3.connect(bob)
-  //   const wcusdcV3AsB = wcusdcV3.connect(bob)
+    await whileImpersonating(WBTC_ETH_HOLDER, async (signer) => {
+      const balance = await wbtcEthLp.balanceOf(signer.address)
+      await wbtcEthLp.connect(signer).transfer(bob.address, balance)
+    })
+    await wbtcEthLp.approve(rToken.address, ethers.constants.MaxUint256)
 
-  //   allocateUSDC(bob.address, initialBal)
-  //   await usdcAsB.approve(cusdcV3.address, ethers.constants.MaxUint256)
-  //   expect(await cusdcV3.balanceOf(bob.address)).to.equal(0)
-  //   await cusdcV3AsB.supply(usdc.address, initialBal)
-  //   expect(await cusdcV3.balanceOf(bob.address)).to.be.closeTo(initialBal, 100e6)
-  //   await cusdcV3AsB.allow(wcusdcV3.address, true)
-  //   await wcusdcV3AsB.depositTo(bob.address, ethers.constants.MaxUint256)
-  //   await wcusdcV3AsB.approve(rToken.address, ethers.constants.MaxUint256)
+    const lpTokenTransferred = (await basketHandler.quantity(wbtcEthLp.address)).toBigInt() * 2n // Issued 2 units of RToken
+    const oldLpBalance = (await wbtcEthLp.balanceOf(bob.address)).toBigInt()
 
-  //   // Check rToken balance
-  //   expect(await rToken.balanceOf(bob.address)).to.equal(0)
-  //   expect(await rToken.connect(bob).issue(issueAmount)).to.emit(rToken, 'Issuance')
+    // Check rToken is issued
+    const issueAmount = exp(2, 18)
+    await expect(await rToken.issue(issueAmount)).to.changeTokenBalance(rToken, bob, issueAmount)
+    // Check LP tokens transferred for RToken issuance
+    expect(await wbtcEthLp.balanceOf(bob.address)).to.eq(oldLpBalance - lpTokenTransferred)
 
-  //   // Check Balances after - Only 1 Collateral in our Prime Basket
-  //   // RToken issued is multiplied by refPerTok() and shifted to the left by 18 - 6 decimals
-  //   expect(await wcusdcV3.balanceOf(backingManager.address)).to.be.closeTo(
-  //     issueAmount / exp(1, 12), // Need to downscale by 12. 18 - 6
-  //     exp(5, 6)
-  //   )
+    // Check asset value
+    // Approx $17,818 in value. The backing manager only has collateral tokens.
+    const expectedValue = (await collateral.bal(backingManager.address))
+      .mul(await collateral.strictPrice())
+      .div(FIX_ONE)
+    expect(await facadeTest.callStatic.totalAssetValue(rToken.address)).to.eq(expectedValue)
 
-  //   // Balances for user
-  //   const remainingBalance = initialBal - issueAmount / exp(1, 12)
-  //   expect(await wcusdcV3.balanceOf(bob.address)).to.be.closeTo(remainingBalance, exp(5, 6))
+    // Redeem Rtokens
+    // We are within the limits of redemption battery (500 RTokens)
+    await expect(rToken.connect(bob).redeem(issueAmount)).changeTokenBalance(
+      rToken,
+      bob,
+      `-${issueAmount}`
+    )
 
-  //   // Check RTokens issued to user
-  //   expect(await rToken.balanceOf(bob.address)).to.equal(issueAmount)
-  //   expect(await rToken.totalSupply()).to.equal(issueAmount)
+    // Check balances after - Backing Manager is empty
+    expect(await wbtcEthLp.balanceOf(backingManager.address)).to.eq(0)
 
-  //   // Check asset value
-  //   expect(await facadeTest.callStatic.totalAssetValue(rToken.address)).to.be.closeTo(
-  //     issueAmount,
-  //     exp(150, 18)
-  //   ) // approx 10K in value
+    // Check funds returned to user
+    expect(await wbtcEthLp.balanceOf(bob.address)).to.eq(oldLpBalance)
 
-  //   // Redeem Rtokens
-  //   // Need to ensure we redeem within the limits of the redemption battery
-  //   const redeemAmount = issueAmount / 20n
-  //   await expect(rToken.connect(bob).redeem(redeemAmount)).to.emit(rToken, 'Redemption')
-
-  //   // Check funds were transferred
-  //   expect(await rToken.balanceOf(bob.address)).to.equal(issueAmount - redeemAmount)
-  //   expect(await rToken.totalSupply()).to.equal(issueAmount - redeemAmount)
-
-  //   // Check balances after - Backing Manager is empty
-  //   expect(await wcusdcV3.balanceOf(backingManager.address)).to.be.closeTo(
-  //     (issueAmount - redeemAmount) / exp(1, 12),
-  //     exp(5, 6)
-  //   )
-
-  //   // Check funds returned to user
-  //   expect(await wcusdcV3.balanceOf(bob.address)).to.be.closeTo(exp(10500, 6), 100)
-
-  //   // Check asset value left
-  //   expect(await facadeTest.callStatic.totalAssetValue(rToken.address)).to.be.closeTo(
-  //     exp(9500, 18),
-  //     exp(10, 18)
-  //   ) // Near 9,500
-  // })
+    // Check asset value left
+    expect(await facadeTest.callStatic.totalAssetValue(rToken.address)).to.eq(0)
+  })
 
   // it('claims rewards - COMP', async () => {
   //   const { cusdcV3, usdc, rToken, backingManager, wcusdcV3, compToken } =
