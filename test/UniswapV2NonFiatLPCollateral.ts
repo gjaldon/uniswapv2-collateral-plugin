@@ -3,6 +3,7 @@ import { loadFixture, time } from '@nomicfoundation/hardhat-network-helpers'
 import hre, { ethers } from 'hardhat'
 import { makeReserveProtocol, deployCollateral } from './fixtures'
 import {
+  UNI,
   COMP,
   RSR,
   MAX_TRADE_VOL,
@@ -383,6 +384,22 @@ describe('UniswapV2NonFiatLPCollateral', () => {
       expect(prevRefPerTok).to.be.lt(newRefPerTok)
     })
   })
+
+  describe('claim rewards', () => {
+    it('does not revert', async () => {
+      const collateral = await deployCollateral()
+
+      await expect(collateral.claimRewards()).to.not.be.reverted
+    })
+
+    it('is a noop and does not claim any rewards', async () => {
+      const collateral = await deployCollateral()
+      const [bob] = await ethers.getSigners()
+      const uni = await ethers.getContractAt('ERC20', UNI)
+
+      await expect(collateral.claimRewards()).to.changeTokenBalance(uni, bob, 0)
+    })
+  })
 })
 
 describe('integration with reserve protocol', () => {
@@ -520,48 +537,4 @@ describe('integration with reserve protocol', () => {
     // Check asset value left
     expect(await facadeTest.callStatic.totalAssetValue(rToken.address)).to.eq(0)
   })
-
-  // it('claims rewards - COMP', async () => {
-  //   const { cusdcV3, usdc, rToken, backingManager, wcusdcV3, compToken } =
-  //     await makeReserveProtocol()
-  //   const [_, bob] = await ethers.getSigners()
-
-  //   // Try to claim rewards at this point - Nothing for Backing Manager
-  //   expect(await compToken.balanceOf(backingManager.address)).to.equal(0)
-  //   await expect(backingManager.claimRewards()).to.emit(backingManager, 'RewardsClaimed')
-
-  //   // No rewards so far
-  //   expect(await compToken.balanceOf(backingManager.address)).to.equal(0)
-
-  //   await mintWcUSDC(usdc, cusdcV3, wcusdcV3, bob, exp(20000, 6))
-  //   const wcusdcV3AsB = wcusdcV3.connect(bob)
-  //   await wcusdcV3AsB.approve(rToken.address, ethers.constants.MaxUint256)
-
-  //   // Issue RTokens
-  //   const issueAmount = exp(10_000, 18)
-  //   await expect(rToken.connect(bob).issue(issueAmount)).to.emit(rToken, 'Issuance')
-  //   expect(await wcusdcV3.balanceOf(backingManager.address)).to.be.gt(0)
-
-  //   // Check RTokens issued to user
-  //   expect(await rToken.balanceOf(bob.address)).to.equal(issueAmount)
-
-  //   // Now we can claim rewards - check initial balance still 0
-  //   expect(await compToken.balanceOf(backingManager.address)).to.equal(0)
-  //   await time.increase(1000)
-  //   await enableRewardsAccrual(cusdcV3)
-
-  //   // Claim rewards
-  //   await expect(await backingManager.claimRewards()).to.emit(backingManager, 'RewardsClaimed')
-
-  //   // Check rewards both in COMP
-  //   const rewardsCOMP1 = await compToken.balanceOf(backingManager.address)
-  //   expect(rewardsCOMP1).to.be.gt(0)
-
-  //   await time.increase(3600)
-  //   // Get additional rewards
-  //   await expect(backingManager.claimRewards()).to.emit(backingManager, 'RewardsClaimed')
-
-  //   const rewardsCOMP2 = await compToken.balanceOf(backingManager.address)
-  //   expect(rewardsCOMP2).to.be.gt(rewardsCOMP1)
-  // })
 })
