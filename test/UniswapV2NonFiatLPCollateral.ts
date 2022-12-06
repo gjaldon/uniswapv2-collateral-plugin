@@ -20,6 +20,7 @@ import {
   allocateERC20,
   WBTC_BTC_FEED,
   CollateralStatus,
+  resetFork,
 } from './helpers'
 
 describe('UniswapV2NonFiatLPCollateral', () => {
@@ -385,16 +386,16 @@ describe('UniswapV2NonFiatLPCollateral', () => {
 })
 
 describe('integration with reserve protocol', () => {
-  // beforeEach(resetFork)
+  beforeEach(resetFork)
 
   it('sets up assets', async () => {
-    const { compAsset, compToken, rsrAsset, rsr } = await loadFixture(makeReserveProtocol)
+    const { compAsset, compToken, rsrAsset, rsr } = await makeReserveProtocol()
     // COMP Token
     expect(await compAsset.isCollateral()).to.equal(false)
     expect(await compAsset.erc20()).to.equal(COMP)
     expect(compToken.address).to.equal(COMP)
     expect(await compToken.decimals()).to.equal(18)
-    expect(await compAsset.strictPrice()).to.be.closeTo(exp(38, 18), exp(1, 17)) // Close to $51 USD - Nov 2022
+    expect(await compAsset.strictPrice()).to.be.closeTo(exp(38, 18), exp(1, 17)) // Close to $38 USD - Nov 2022
     expect(await compAsset.maxTradeVolume()).to.equal(MAX_TRADE_VOL)
 
     // RSR Token
@@ -407,132 +408,71 @@ describe('integration with reserve protocol', () => {
   })
 
   it('sets up collateral', async () => {
-    const { collateral } = await loadFixture(makeReserveProtocol)
+    const { collateral } = await makeReserveProtocol()
+    const [bob] = await ethers.getSigners()
+
     expect(await collateral.isCollateral()).to.equal(true)
-    expect(await collateral.erc20()).to.equal(await collateral.pair())
+    expect(await collateral.erc20()).to.equal(ethers.utils.getAddress(WBTC_ETH_PAIR))
     expect(await collateral.targetName()).to.equal(
       ethers.utils.formatBytes32String('UNIV2SQRTBTCETH')
     )
-    expect(await collateral.refPerTok()).to.be.gt(FIX_ONE)
-    expect(await collateral.targetPerRef()).to.equal(FIX_ONE)
+    expect(await collateral.targetPerRef()).to.eq(FIX_ONE)
     expect(await collateral.strictPrice()).to.eq(1101270336107664418226494539n)
-    expect(await collateral.maxTradeVolume()).to.equal(MAX_TRADE_VOL)
+    expect(await collateral.maxTradeVolume()).to.eq(MAX_TRADE_VOL)
   })
 
-  // const NO_PRICE_DATA_FEED = '0x51597f405303C4377E36123cBc172b13269EA163'
+  it('registers ERC20s and Assets/Collateral', async () => {
+    const { collateral, assetRegistry, rTokenAsset, rsrAsset, compAsset } =
+      await makeReserveProtocol()
+    // Check assets/collateral
+    const ERC20s = await assetRegistry.erc20s()
 
-  // it('handles invalid/stale price - collateral', async () => {
-  //   const { collateral, chainlinkFeed } = await makeReserveProtocol()
-  //   // Reverts with stale price
-  //   await time.increase(ORACLE_TIMEOUT)
-  //   await expect(collateral.strictPrice()).to.be.revertedWithCustomError(collateral, 'StalePrice')
+    expect(ERC20s[0]).to.equal(await rTokenAsset.erc20())
+    expect(ERC20s[1]).to.equal(await rsrAsset.erc20())
+    expect(ERC20s[2]).to.equal(await compAsset.erc20())
+    expect(ERC20s[3]).to.equal(await collateral.erc20())
 
-  //   // Refresh should mark status IFFY
-  //   await collateral.refresh()
-  //   expect(await collateral.status()).to.equal(CollateralStatus.IFFY)
+    // Assets
+    expect(await assetRegistry.toAsset(ERC20s[0])).to.equal(rTokenAsset.address)
+    expect(await assetRegistry.toAsset(ERC20s[1])).to.equal(rsrAsset.address)
+    expect(await assetRegistry.toAsset(ERC20s[2])).to.equal(compAsset.address)
+    expect(await assetRegistry.toAsset(ERC20s[3])).to.equal(collateral.address)
+    // Collaterals
+    expect(await assetRegistry.toColl(ERC20s[3])).to.equal(collateral.address)
+  })
 
-  //   const CusdcV3WrapperFactory = <CusdcV3Wrapper__factory>(
-  //     await ethers.getContractFactory('CusdcV3Wrapper')
-  //   )
-  //   const wcusdcV3 = <CusdcV3Wrapper>await CusdcV3WrapperFactory.deploy(CUSDC_V3, REWARDS, COMP)
+  it('registers simple basket', async () => {
+    const { rToken, rTokenAsset, basketHandler, facade, facadeTest } = await makeReserveProtocol()
+    const [bob] = await ethers.getSigners()
 
-  //   // CTokens Collateral with no price
-  //   const noPriceCtokenCollateral = await deployCollateral({
-  //     erc20: wcusdcV3.address,
-  //     chainlinkFeed: NO_PRICE_DATA_FEED,
-  //   })
+    // Basket
+    expect(await basketHandler.fullyCollateralized()).to.equal(true)
+    const backing = await facade.basketTokens(rToken.address)
+    expect(backing[0]).to.equal(ethers.utils.getAddress(WBTC_ETH_PAIR))
+    expect(backing.length).to.equal(1)
 
-  //   // Collateral with no price info should revert
-  //   await expect(noPriceCtokenCollateral.strictPrice()).to.be.reverted
-  //   // Refresh should also revert - status is not modified
-  //   await expect(noPriceCtokenCollateral.refresh()).to.be.reverted
-  //   expect(await noPriceCtokenCollateral.status()).to.equal(CollateralStatus.SOUND)
+    // Check other values
+    expect(await basketHandler.nonce()).to.be.gt(0n)
+    expect(await basketHandler.timestamp()).to.be.gt(0n)
+    expect(await basketHandler.status()).to.equal(CollateralStatus.SOUND)
+    expect(await facadeTest.callStatic.totalAssetValue(rToken.address)).to.equal(0)
+    const [isFallback, price] = await basketHandler.price(true)
+    expect(isFallback).to.equal(false)
+    // $8,909.10 is price of target unit
+    expect(price).to.eq(8909100654425313158131n)
 
-  //   // Reverts with a feed with zero price
-  //   await chainlinkFeed.updateAnswer(0n)
-  //   // Reverts with zero price
-  //   await expect(collateral.strictPrice()).to.be.revertedWithCustomError(
-  //     collateral,
-  //     'PriceOutsideRange'
-  //   )
-  //   // Refresh should mark status IFFY
-  //   await collateral.refresh()
-  //   expect(await collateral.status()).to.equal(CollateralStatus.IFFY)
-  // })
+    const wbtcEthLp = await ethers.getContractAt('UniswapV2Pair', WBTC_ETH_PAIR)
+    await whileImpersonating(WBTC_ETH_HOLDER, async (signer) => {
+      const balance = await wbtcEthLp.balanceOf(signer.address)
+      await wbtcEthLp.connect(signer).transfer(bob.address, balance)
+    })
+    const issueAmount = exp(100, 10)
+    await wbtcEthLp.approve(rToken.address, ethers.constants.MaxUint256)
+    expect(await rToken.issue(issueAmount)).to.emit(rToken, 'Issuance')
+    expect(await rToken.balanceOf(bob.address)).to.equal(issueAmount)
 
-  // it('registers ERC20s and Assets/Collateral', async () => {
-  //   const { collateral, assetRegistry, rTokenAsset, rsrAsset, compAsset } =
-  //     await makeReserveProtocol()
-  //   // Check assets/collateral
-  //   const ERC20s = await assetRegistry.erc20s()
-
-  //   expect(ERC20s[0]).to.equal(await rTokenAsset.erc20())
-  //   expect(ERC20s[1]).to.equal(await rsrAsset.erc20())
-  //   expect(ERC20s[2]).to.equal(await compAsset.erc20())
-  //   expect(ERC20s[3]).to.equal(await collateral.erc20())
-
-  //   // Assets
-  //   expect(await assetRegistry.toAsset(ERC20s[0])).to.equal(rTokenAsset.address)
-  //   expect(await assetRegistry.toAsset(ERC20s[1])).to.equal(rsrAsset.address)
-  //   expect(await assetRegistry.toAsset(ERC20s[2])).to.equal(compAsset.address)
-  //   expect(await assetRegistry.toAsset(ERC20s[3])).to.equal(collateral.address)
-  //   // Collaterals
-  //   expect(await assetRegistry.toColl(ERC20s[3])).to.equal(collateral.address)
-  // })
-
-  // it('registers simple basket', async () => {
-  //   const {
-  //     collateral,
-  //     rToken,
-  //     rTokenAsset,
-  //     basketHandler,
-  //     facade,
-  //     facadeTest,
-  //     cusdcV3,
-  //     usdc,
-  //     wcusdcV3,
-  //   } = await loadFixture(makeReserveProtocol)
-  //   const [_, bob] = await ethers.getSigners()
-
-  //   // Basket
-  //   expect(await basketHandler.fullyCollateralized()).to.equal(true)
-  //   const backing = await facade.basketTokens(rToken.address)
-  //   expect(backing[0]).to.equal(wcusdcV3.address)
-  //   expect(backing.length).to.equal(1)
-
-  //   // Check other values
-  //   expect(await basketHandler.nonce()).to.be.gt(0n)
-  //   expect(await basketHandler.timestamp()).to.be.gt(0n)
-  //   expect(await basketHandler.status()).to.equal(CollateralStatus.SOUND)
-  //   expect(await facadeTest.callStatic.totalAssetValue(rToken.address)).to.equal(0)
-  //   const [isFallback, price] = await basketHandler.price(true)
-  //   expect(isFallback).to.equal(false)
-  //   expect(price).to.be.closeTo(FIX_ONE, exp(15, 15))
-
-  //   const issueAmount = exp(10000, 18)
-  //   const initialBal = exp(20000, 6)
-  //   const usdcAsB = usdc.connect(bob)
-  //   const cusdcV3AsB = cusdcV3.connect(bob)
-  //   const wcusdcV3AsB = wcusdcV3.connect(bob)
-
-  //   allocateUSDC(bob.address, initialBal)
-  //   await usdcAsB.approve(cusdcV3.address, ethers.constants.MaxUint256)
-  //   expect(await cusdcV3.balanceOf(bob.address)).to.equal(0)
-  //   await cusdcV3AsB.supply(usdc.address, exp(20000, 6))
-  //   expect(await cusdcV3.balanceOf(bob.address)).to.be.closeTo(20000e6, 100e6)
-  //   await cusdcV3AsB.allow(wcusdcV3.address, true)
-  //   await wcusdcV3AsB.depositTo(bob.address, ethers.constants.MaxUint256)
-  //   await wcusdcV3AsB.approve(rToken.address, ethers.constants.MaxUint256)
-  //   expect(await rToken.connect(bob).issue(issueAmount)).to.emit(rToken, 'Issuance')
-  //   expect(await rToken.balanceOf(bob.address)).to.equal(issueAmount)
-
-  //   const collateralPrice = await collateral.strictPrice()
-  //   // Check RToken price
-  //   expect(await rTokenAsset.strictPrice()).to.be.closeTo(
-  //     collateralPrice,
-  //     collateralPrice.div(1000)
-  //   )
-  // })
+    expect(await rTokenAsset.strictPrice()).eq(price)
+  })
 
   // it('issues/reedems with simple basket', async function () {
   //   const { cusdcV3, usdc, rToken, facadeTest, backingManager, wcusdcV3 } =

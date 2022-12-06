@@ -258,7 +258,7 @@ export const makeReserveProtocol = async () => {
 
   // Set initial Basket
   const collateralERC20 = await collateral.erc20()
-  await basketHandler.connect(owner).setPrimeBasket([collateralERC20], [FIX_ONE]) // CUSDC_V3 is 100% of Basket
+  await basketHandler.connect(owner).setPrimeBasket([collateralERC20], [FIX_ONE]) // Uniswap Pair is 100% of Basket
   await basketHandler.connect(owner).refreshBasket()
 
   // Set up allowances
@@ -313,6 +313,7 @@ export const deployCollateral = async (
   const UniswapV2CollateralFactory = <UniswapV2NonFiatLPCollateral__factory>(
     await ethers.getContractFactory('UniswapV2NonFiatLPCollateral')
   )
+  const collateral = <UniswapV2NonFiatLPCollateral>await UniswapV2CollateralFactory.deploy(newOpts)
 
-  return <UniswapV2NonFiatLPCollateral>await UniswapV2CollateralFactory.deploy(newOpts)
+  return collateral
 }

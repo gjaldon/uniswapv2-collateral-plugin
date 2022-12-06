@@ -76,14 +76,13 @@ contract UniswapV2NonFiatLPCollateral is ICollateral {
         delayUntilDefault = config.delayUntilDefault;
         pair = config.pair;
         fallbackPrice = config.fallbackPrice;
-        erc20 = IERC20Metadata(address(config.pair));
+        erc20 = IERC20Metadata(address(pair));
         erc20Decimals = erc20.decimals();
         token0decimals = IERC20Metadata(address(pair.token0())).decimals();
         token1decimals = IERC20Metadata(address(pair.token1())).decimals();
         maxTradeVolume = config.maxTradeVolume;
         oracleTimeout = config.oracleTimeout;
         defaultThreshold = config.defaultThreshold;
-        prevReferencePrice = refPerTok();
 
         // Solidity does not support immutable arrays. This is a hack to get the equivalent of
         // an immutable array so we do not have store the token feeds in the blockchain. This is
@@ -120,6 +119,8 @@ contract UniswapV2NonFiatLPCollateral is ICollateral {
             address(_t1feed0) != address(0),
             "at least 1 token1 price feeds can not be zero address"
         );
+
+        prevReferencePrice = refPerTok();
     }
 
     /// Refresh exchange rates and update default status.
