@@ -426,8 +426,6 @@ describe('integration with reserve protocol', () => {
 
   it('sets up collateral', async () => {
     const { collateral } = await makeReserveProtocol()
-    const [bob] = await ethers.getSigners()
-
     expect(await collateral.isCollateral()).to.equal(true)
     expect(await collateral.erc20()).to.equal(ethers.utils.getAddress(WBTC_ETH_PAIR))
     expect(await collateral.targetName()).to.equal(

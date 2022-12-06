@@ -1,24 +1,18 @@
 import { expect } from 'chai'
 import { time } from '@nomicfoundation/hardhat-network-helpers'
-import hre, { ethers } from 'hardhat'
+import { ethers } from 'hardhat'
 import { makeReserveProtocol, deployCollateral } from './fixtures/fiat'
 import {
   UNI,
   COMP,
   RSR,
   MAX_TRADE_VOL,
-  USDC_ETH_PAIR,
-  USDC_USD_FEED,
   WBTC,
   WETH,
-  WBTC_ETH_PAIR,
-  WBTC_HOLDER,
   FIX_ONE,
   exp,
   UNISWAP_ROUTER,
-  WBTC_ETH_HOLDER,
   whileImpersonating,
-  allocateERC20,
   WBTC_BTC_FEED,
   CollateralStatus,
   resetFork,
@@ -410,15 +404,11 @@ describe('UniswapV2FiatLPCollateral integration with reserve protocol', () => {
 
   it('sets up collateral', async () => {
     const { collateral } = await makeReserveProtocol()
-    const [bob] = await ethers.getSigners()
-
     expect(await collateral.isCollateral()).to.equal(true)
-    expect(await collateral.erc20()).to.equal(ethers.utils.getAddress(WBTC_ETH_PAIR))
-    expect(await collateral.targetName()).to.equal(
-      ethers.utils.formatBytes32String('UNIV2SQRTBTCETH')
-    )
+    expect(await collateral.erc20()).to.equal(ethers.utils.getAddress(DAI_USDC_PAIR))
+    expect(await collateral.targetName()).to.equal(ethers.utils.formatBytes32String('USD'))
     expect(await collateral.targetPerRef()).to.eq(FIX_ONE)
-    expect(await collateral.strictPrice()).to.eq(1101270336107664418226494539n)
+    expect(await collateral.strictPrice()).to.eq(2252839994825176096892924n)
     expect(await collateral.maxTradeVolume()).to.eq(MAX_TRADE_VOL)
   })
 
@@ -449,7 +439,7 @@ describe('UniswapV2FiatLPCollateral integration with reserve protocol', () => {
     // Basket
     expect(await basketHandler.fullyCollateralized()).to.equal(true)
     const backing = await facade.basketTokens(rToken.address)
-    expect(backing[0]).to.equal(ethers.utils.getAddress(WBTC_ETH_PAIR))
+    expect(backing[0]).to.equal(ethers.utils.getAddress(DAI_USDC_PAIR))
     expect(backing.length).to.equal(1)
 
     // Check other values
@@ -459,19 +449,8 @@ describe('UniswapV2FiatLPCollateral integration with reserve protocol', () => {
     expect(await facadeTest.callStatic.totalAssetValue(rToken.address)).to.equal(0)
     const [isFallback, price] = await basketHandler.price(true)
     expect(isFallback).to.equal(false)
-    // $8,909.10 is price of target unit
-    expect(price).to.eq(8909100654425313158131n)
-
-    const wbtcEthLp = await ethers.getContractAt('UniswapV2Pair', WBTC_ETH_PAIR)
-    await whileImpersonating(WBTC_ETH_HOLDER, async (signer) => {
-      const balance = await wbtcEthLp.balanceOf(signer.address)
-      await wbtcEthLp.connect(signer).transfer(bob.address, balance)
-    })
-    const issueAmount = exp(1, 18)
-    await wbtcEthLp.approve(rToken.address, ethers.constants.MaxUint256)
-    expect(await rToken.issue(issueAmount)).to.emit(rToken, 'Issuance')
-    expect(await rToken.balanceOf(bob.address)).to.equal(issueAmount)
-
+    // $1.99 is price of target unit
+    expect(price).to.eq(1999729779296468928n)
     expect(await rTokenAsset.strictPrice()).eq(price)
   })
 
@@ -480,29 +459,32 @@ describe('UniswapV2FiatLPCollateral integration with reserve protocol', () => {
       await makeReserveProtocol()
     const [bob] = await ethers.getSigners()
 
-    const wbtcEthLp = await ethers.getContractAt('UniswapV2Pair', WBTC_ETH_PAIR)
+    const daiUsdcLp = await ethers.getContractAt('UniswapV2Pair', DAI_USDC_PAIR)
 
-    await whileImpersonating(WBTC_ETH_HOLDER, async (signer) => {
-      const balance = await wbtcEthLp.balanceOf(signer.address)
-      await wbtcEthLp.connect(signer).transfer(bob.address, balance)
+    await whileImpersonating(DAI_USDC_HOLDER, async (signer) => {
+      const balance = await daiUsdcLp.balanceOf(signer.address)
+      await daiUsdcLp.connect(signer).transfer(bob.address, balance)
     })
-    await wbtcEthLp.approve(rToken.address, ethers.constants.MaxUint256)
+    await daiUsdcLp.approve(rToken.address, ethers.constants.MaxUint256)
 
-    const lpTokenTransferred = (await basketHandler.quantity(wbtcEthLp.address)).toBigInt() * 2n // Issued 2 units of RToken
-    const oldLpBalance = (await wbtcEthLp.balanceOf(bob.address)).toBigInt()
+    const lpTokenTransferred = (await basketHandler.quantity(daiUsdcLp.address)).toBigInt() * 2n // Issued 2 units of RToken
+    const oldLpBalance = (await daiUsdcLp.balanceOf(bob.address)).toBigInt()
 
     // Check rToken is issued
     const issueAmount = exp(2, 18)
     await expect(await rToken.issue(issueAmount)).to.changeTokenBalance(rToken, bob, issueAmount)
     // Check LP tokens transferred for RToken issuance
-    expect(await wbtcEthLp.balanceOf(bob.address)).to.eq(oldLpBalance - lpTokenTransferred)
+    expect(await daiUsdcLp.balanceOf(bob.address)).to.eq(oldLpBalance - lpTokenTransferred)
 
     // Check asset value
-    // Approx $17,818 in value. The backing manager only has collateral tokens.
+    // Approx $3.99 in value. The backing manager only has collateral tokens.
     const expectedValue = (await collateral.bal(backingManager.address))
       .mul(await collateral.strictPrice())
       .div(FIX_ONE)
-    expect(await facadeTest.callStatic.totalAssetValue(rToken.address)).to.eq(expectedValue)
+    expect(await facadeTest.callStatic.totalAssetValue(rToken.address)).to.be.closeTo(
+      expectedValue,
+      1
+    )
 
     // Redeem Rtokens
     // We are within the limits of redemption battery (500 RTokens)
@@ -513,10 +495,10 @@ describe('UniswapV2FiatLPCollateral integration with reserve protocol', () => {
     )
 
     // Check balances after - Backing Manager is empty
-    expect(await wbtcEthLp.balanceOf(backingManager.address)).to.eq(0)
+    expect(await daiUsdcLp.balanceOf(backingManager.address)).to.eq(0)
 
     // Check funds returned to user
-    expect(await wbtcEthLp.balanceOf(bob.address)).to.eq(oldLpBalance)
+    expect(await daiUsdcLp.balanceOf(bob.address)).to.eq(oldLpBalance)
 
     // Check asset value left
     expect(await facadeTest.callStatic.totalAssetValue(rToken.address)).to.eq(0)
