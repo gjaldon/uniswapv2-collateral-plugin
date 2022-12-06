@@ -135,19 +135,9 @@ contract UniswapV2NonFiatLPCollateral is ICollateral {
         if (referencePrice < prevReferencePrice) {
             markStatus(CollateralStatus.DISABLED);
         } else {
-            try this.token0price() returns (uint192) {
-                // noop
-            } catch (bytes memory errData) {
-                // see: docs/solidity-style.md#Catching-Empty-Data
-                if (errData.length == 0) revert(); // solhint-disable-line reason-string
-                markStatus(CollateralStatus.IFFY);
-            }
-
-            try this.token1price() returns (uint192) {
-                // noop
-            } catch (bytes memory errData) {
-                // see: docs/solidity-style.md#Catching-Empty-Data
-                if (errData.length == 0) revert(); // solhint-disable-line reason-string
+            if (feedWorking(this.token0price) && feedWorking(this.token1price)) {
+                markStatus(CollateralStatus.SOUND);
+            } else {
                 markStatus(CollateralStatus.IFFY);
             }
         }
@@ -159,6 +149,18 @@ contract UniswapV2NonFiatLPCollateral is ICollateral {
         }
 
         // No interactions beyond the initial refresher
+    }
+
+    function feedWorking(
+        function() external view returns (uint192) getPrice
+    ) internal view returns (bool) {
+        try getPrice() returns (uint192) {
+            return true;
+        } catch (bytes memory errData) {
+            // see: docs/solidity-style.md#Catching-Empty-Data
+            if (errData.length == 0) revert(); // solhint-disable-line reason-string
+            return false;
+        }
     }
 
     function strictPrice() public view returns (uint192) {
