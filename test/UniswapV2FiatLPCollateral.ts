@@ -24,6 +24,7 @@ import {
   DAI_USDC_PAIR,
   DAI_USDC_HOLDER,
 } from './helpers'
+import { MockV3Aggregator, MockV3Aggregator__factory } from '../typechain-types'
 
 describe('UniswapV2FiatLPCollateral', () => {
   describe('constructor validation', () => {
@@ -294,6 +295,167 @@ describe('UniswapV2FiatLPCollateral', () => {
       await expect(collateral.refresh()).to.emit(collateral, 'DefaultStatusChanged')
       expect(await collateral.status()).to.equal(CollateralStatus.DISABLED)
       expect(await collateral.whenDefault()).to.equal(await time.latest())
+    })
+
+    it('recovers from soft-default', async () => {
+      const MockV3AggregatorFactory = <MockV3Aggregator__factory>(
+        await ethers.getContractFactory('MockV3Aggregator')
+      )
+      const daiMockFeed = <MockV3Aggregator>await MockV3AggregatorFactory.deploy(18, exp(1, 18))
+      const collateral = await deployCollateral({
+        token0priceFeeds: [daiMockFeed.address],
+      })
+
+      // Check initial state
+      expect(await collateral.status()).to.equal(CollateralStatus.SOUND)
+      expect(await collateral.whenDefault()).to.equal(ethers.constants.MaxUint256)
+
+      // Depeg DAI:USD - Reducing price by 20% from 1 to 0.8
+      await daiMockFeed.updateAnswer(exp(8, 17))
+
+      await expect(collateral.refresh())
+        .to.emit(collateral, 'DefaultStatusChanged')
+        .withArgs(CollateralStatus.SOUND, CollateralStatus.IFFY)
+      expect(await collateral.status()).to.equal(CollateralStatus.IFFY)
+
+      // DAI:USD peg recovers back to 1:1
+      await daiMockFeed.updateAnswer(exp(1, 18))
+
+      // Collateral becomes sound again because peg has recovered
+      await expect(collateral.refresh())
+        .to.emit(collateral, 'DefaultStatusChanged')
+        .withArgs(CollateralStatus.IFFY, CollateralStatus.SOUND)
+      expect(await collateral.status()).to.equal(CollateralStatus.SOUND)
+    })
+
+    it('soft-defaults when token0 depegs from fiat target beyond threshold', async () => {
+      const MockV3AggregatorFactory = <MockV3Aggregator__factory>(
+        await ethers.getContractFactory('MockV3Aggregator')
+      )
+      const daiMockFeed = <MockV3Aggregator>await MockV3AggregatorFactory.deploy(18, exp(1, 18))
+      const collateral = await deployCollateral({
+        token0priceFeeds: [daiMockFeed.address],
+      })
+      const delayUntilDefault = (await collateral.delayUntilDefault()).toBigInt()
+
+      // Check initial state
+      expect(await collateral.status()).to.equal(CollateralStatus.SOUND)
+      expect(await collateral.whenDefault()).to.equal(ethers.constants.MaxUint256)
+
+      // Depeg DAI:USD - Reducing price by 20% from 1 to 0.8
+      await daiMockFeed.updateAnswer(exp(8, 17))
+
+      // Force updates - Should update whenDefault and status
+      let expectedDefaultTimestamp: bigint
+
+      // Set next block timestamp - for deterministic result
+      const nextBlockTimestamp = (await time.latest()) + 1
+      await time.setNextBlockTimestamp(nextBlockTimestamp)
+      expectedDefaultTimestamp = BigInt(nextBlockTimestamp) + delayUntilDefault
+
+      await expect(collateral.refresh())
+        .to.emit(collateral, 'DefaultStatusChanged')
+        .withArgs(CollateralStatus.SOUND, CollateralStatus.IFFY)
+      expect(await collateral.status()).to.equal(CollateralStatus.IFFY)
+      expect(await collateral.whenDefault()).to.equal(expectedDefaultTimestamp)
+
+      // Move time forward past delayUntilDefault
+      await time.increase(delayUntilDefault)
+      expect(await collateral.status()).to.equal(CollateralStatus.DISABLED)
+
+      // Nothing changes if attempt to refresh after default
+      let prevWhenDefault: bigint = (await collateral.whenDefault()).toBigInt()
+      await expect(collateral.refresh()).to.not.emit(collateral, 'DefaultStatusChanged')
+      expect(await collateral.status()).to.equal(CollateralStatus.DISABLED)
+      expect(await collateral.whenDefault()).to.equal(prevWhenDefault)
+    })
+
+    it('soft-defaults when token1 depegs from fiat target beyond threshold', async () => {
+      const MockV3AggregatorFactory = <MockV3Aggregator__factory>(
+        await ethers.getContractFactory('MockV3Aggregator')
+      )
+      const usdcMockFeed = <MockV3Aggregator>await MockV3AggregatorFactory.deploy(6, exp(1, 6))
+      const collateral = await deployCollateral({
+        token1priceFeeds: [usdcMockFeed.address],
+      })
+      const delayUntilDefault = (await collateral.delayUntilDefault()).toBigInt()
+
+      // Check initial state
+      expect(await collateral.status()).to.equal(CollateralStatus.SOUND)
+      expect(await collateral.whenDefault()).to.equal(ethers.constants.MaxUint256)
+
+      // Depeg DAI:USD - Reducing price by 20% from 1 to 0.8
+      await usdcMockFeed.updateAnswer(exp(8, 5))
+
+      // Force updates - Should update whenDefault and status
+      let expectedDefaultTimestamp: bigint
+
+      // Set next block timestamp - for deterministic result
+      const nextBlockTimestamp = (await time.latest()) + 1
+      await time.setNextBlockTimestamp(nextBlockTimestamp)
+      expectedDefaultTimestamp = BigInt(nextBlockTimestamp) + delayUntilDefault
+
+      await expect(collateral.refresh())
+        .to.emit(collateral, 'DefaultStatusChanged')
+        .withArgs(CollateralStatus.SOUND, CollateralStatus.IFFY)
+      expect(await collateral.status()).to.equal(CollateralStatus.IFFY)
+      expect(await collateral.whenDefault()).to.equal(expectedDefaultTimestamp)
+
+      // Move time forward past delayUntilDefault
+      await time.increase(delayUntilDefault)
+      expect(await collateral.status()).to.equal(CollateralStatus.DISABLED)
+
+      // Nothing changes if attempt to refresh after default
+      let prevWhenDefault: bigint = (await collateral.whenDefault()).toBigInt()
+      await expect(collateral.refresh()).to.not.emit(collateral, 'DefaultStatusChanged')
+      expect(await collateral.status()).to.equal(CollateralStatus.DISABLED)
+      expect(await collateral.whenDefault()).to.equal(prevWhenDefault)
+    })
+
+    it('soft-defaults when token1 depegs from token0 beyond threshold', async () => {
+      const PairMockFactory = await ethers.getContractFactory('PairMock')
+      const pairMock = await PairMockFactory.deploy(
+        DAI,
+        USDC,
+        exp(10_000, 18),
+        exp(10_000, 6),
+        exp(1_000, 18)
+      )
+      const collateral = await deployCollateral({
+        pair: pairMock.address,
+      })
+      const delayUntilDefault = (await collateral.delayUntilDefault()).toBigInt()
+
+      // Check initial state
+      expect(await collateral.status()).to.equal(CollateralStatus.SOUND)
+      expect(await collateral.whenDefault()).to.equal(ethers.constants.MaxUint256)
+
+      // Depeg DAI:USDC - Set ratio of DAI reserves to USDC reserves 1:0.8
+      await pairMock.setReserves(exp(20_000, 18), exp(16_000, 6))
+
+      // Force updates - Should update whenDefault and status
+      let expectedDefaultTimestamp: bigint
+
+      // Set next block timestamp - for deterministic result
+      const nextBlockTimestamp = (await time.latest()) + 1
+      await time.setNextBlockTimestamp(nextBlockTimestamp)
+      expectedDefaultTimestamp = BigInt(nextBlockTimestamp) + delayUntilDefault
+
+      await expect(collateral.refresh())
+        .to.emit(collateral, 'DefaultStatusChanged')
+        .withArgs(CollateralStatus.SOUND, CollateralStatus.IFFY)
+      expect(await collateral.status()).to.equal(CollateralStatus.IFFY)
+      expect(await collateral.whenDefault()).to.equal(expectedDefaultTimestamp)
+
+      // Move time forward past delayUntilDefault
+      await time.increase(delayUntilDefault)
+      expect(await collateral.status()).to.equal(CollateralStatus.DISABLED)
+
+      // Nothing changes if attempt to refresh after default
+      let prevWhenDefault: bigint = (await collateral.whenDefault()).toBigInt()
+      await expect(collateral.refresh()).to.not.emit(collateral, 'DefaultStatusChanged')
+      expect(await collateral.status()).to.equal(CollateralStatus.DISABLED)
+      expect(await collateral.whenDefault()).to.equal(prevWhenDefault)
     })
   })
 

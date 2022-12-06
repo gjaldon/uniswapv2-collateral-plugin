@@ -50,7 +50,7 @@ export const deployCollateral = async (
   const newOpts = { ...defaultOpts, ...opts }
 
   const UniswapV2CollateralFactory = <UniswapV2FiatLPCollateral__factory>(
-    await ethers.getContractFactory('UniswapV2NonFiatLPCollateral')
+    await ethers.getContractFactory('UniswapV2FiatLPCollateral')
   )
   const collateral = <UniswapV2FiatLPCollateral>await UniswapV2CollateralFactory.deploy(newOpts)
 

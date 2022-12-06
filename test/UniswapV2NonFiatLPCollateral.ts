@@ -429,7 +429,7 @@ describe('integration with reserve protocol', () => {
     expect(await collateral.isCollateral()).to.equal(true)
     expect(await collateral.erc20()).to.equal(ethers.utils.getAddress(WBTC_ETH_PAIR))
     expect(await collateral.targetName()).to.equal(
-      ethers.utils.formatBytes32String('UNIV2SQRTBTCETH')
+      ethers.utils.formatBytes32String('UNIV2SQRTWBTCETH')
     )
     expect(await collateral.targetPerRef()).to.eq(FIX_ONE)
     expect(await collateral.strictPrice()).to.eq(1101270336107664418226494539n)
