@@ -45,6 +45,7 @@ import {
   Asset,
   UniswapV2NonFiatLPCollateral,
   UniswapV2NonFiatLPCollateral__factory,
+  ICollateral,
 } from '../typechain-types'
 
 const RSR_PRICE_FEED = '0x759bBC1be8F90eE6457C44abc7d443842a976d02'
@@ -84,7 +85,7 @@ interface IImplementations {
   components: IComponents
 }
 
-export const makeReserveProtocol = async () => {
+export const makeReserveProtocolWith = async (collateral: ICollateral) => {
   // Setup ERC20 mocks
   const rsr = <ERC20Mock>await ethers.getContractAt('ERC20Mock', RSR)
   const compToken = <ERC20Mock>await ethers.getContractAt('ERC20Mock', COMP)
@@ -249,8 +250,6 @@ export const makeReserveProtocol = async () => {
   const rTokenAsset: RTokenAsset = <RTokenAsset>(
     await ethers.getContractAt('RTokenAsset', await assetRegistry.toAsset(rToken.address))
   )
-
-  const collateral = await deployCollateral()
 
   // Register an Asset and a Collateral
   await assetRegistry.connect(owner).register(compAsset.address)

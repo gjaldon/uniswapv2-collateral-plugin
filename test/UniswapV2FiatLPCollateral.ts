@@ -1,7 +1,7 @@
 import { expect } from 'chai'
 import { time } from '@nomicfoundation/hardhat-network-helpers'
 import hre, { ethers } from 'hardhat'
-import { makeReserveProtocol, deployCollateral } from './fixtures/non-fiat'
+import { makeReserveProtocol, deployCollateral } from './fixtures/fiat'
 import {
   UNI,
   COMP,
@@ -22,9 +22,16 @@ import {
   WBTC_BTC_FEED,
   CollateralStatus,
   resetFork,
+  DAI_USDT_PAIR,
+  USDT_USD_FEED,
+  DAI,
+  USDC,
+  DAI_HOLDER,
+  DAI_USDC_PAIR,
+  DAI_USDC_HOLDER,
 } from './helpers'
 
-describe('UniswapV2NonFiatLPCollateral', () => {
+describe('UniswapV2FiatLPCollateral', () => {
   describe('constructor validation', () => {
     it('validates targetName', async () => {
       await expect(deployCollateral({ targetName: ethers.constants.HashZero })).to.be.revertedWith(
@@ -92,31 +99,34 @@ describe('UniswapV2NonFiatLPCollateral', () => {
   describe('totalLiquidity', () => {
     it('returns value of total liquidity of the pair', async () => {
       const collateralA = await deployCollateral()
-      // Should equal $7,184,249.72 which is total liquidity of WBTC-ETH pair
-      expect(await collateralA.totalLiquidity()).to.eq(7171099424319952054325288n)
+      // Should equal $34,575,106.26 which is total liquidity of DAI-USDC pair
+      expect(await collateralA.totalLiquidity()).to.eq(34575106261841690084139295n)
 
       const collateralB = await deployCollateral({
-        pair: USDC_ETH_PAIR,
-        token0priceFeeds: [USDC_USD_FEED],
+        pair: DAI_USDT_PAIR,
+        token1priceFeeds: [USDT_USD_FEED],
       })
 
-      // Should equal $84,634,138.11 which is total liquidity of WBTC-ETH pair
-      expect(await collateralB.totalLiquidity()).to.eq(84634138115718441828431798n)
+      // Should equal $6,812,202.93 which is total liquidity of WBTC-ETH pair
+      expect(await collateralB.totalLiquidity()).to.eq(6812202930942865233307666n)
     })
   })
 
   describe('prices', () => {
     it('returns price per LP Token', async () => {
       const collateralA = await deployCollateral()
-      // Price per LP Token in USD is roughly at $1,101,270,336.11 Can be verified by
-      // dividing Value by Quantity of holdings here https://etherscan.io/token/0xbb2b8038a1640196fbe3e38816f3e67cba72d940#balances.
-      expect(await collateralA.strictPrice()).to.eq(1101270336107664418226494539n)
+      // Price per LP Token in USD is roughly at $2,251,158.89 Can be verified by
+      // dividing Value by Quantity of holdings here https://etherscan.io/token/0xae461ca67b15dc8dc81ce7615e0320da1a9ab8d5#balances.
+      expect(await collateralA.strictPrice()).to.eq(2252839994825176096892924n)
 
       const collateralB = await deployCollateral({
-        pair: USDC_ETH_PAIR,
-        token0priceFeeds: [USDC_USD_FEED],
+        pair: DAI_USDT_PAIR,
+        token0priceFeeds: [USDT_USD_FEED],
       })
-      expect(await collateralB.strictPrice()).to.eq(146456739000923443614846591n)
+
+      // Price per LP Token in USD is roughly at $2,299,257.49 Can be verified by
+      // dividing Value by Quantity of holdings here https://etherscan.io/token/0xb20bd5d04be54f870d5c0d3ca85d82b34b836405#balances.
+      expect(await collateralB.strictPrice()).to.eq(2299257495041926311893479n)
     })
 
     it('price changes as token0 and token1 prices change', async () => {
@@ -145,33 +155,41 @@ describe('UniswapV2NonFiatLPCollateral', () => {
       const [swapper] = await ethers.getSigners()
       let prevPrice = await collateral.strictPrice()
 
-      const wbtc = await ethers.getContractAt('ERC20', WBTC)
+      const dai = await ethers.getContractAt('ERC20', DAI)
       const uniswapRouter = await ethers.getContractAt('UniswapV2Router02', UNISWAP_ROUTER)
+      await dai.approve(uniswapRouter.address, ethers.constants.MaxUint256)
+
+      await whileImpersonating(DAI_HOLDER, async (signer) => {
+        const balance = await dai.balanceOf(signer.address)
+        await dai.connect(signer).transfer(swapper.address, balance)
+      })
+
       await expect(
-        uniswapRouter.swapExactETHForTokens(
-          0,
-          [WETH, WBTC],
+        uniswapRouter.swapExactTokensForTokens(
+          exp(100_000, 18),
+          exp(99_000, 6),
+          [DAI, USDC],
           swapper.address,
-          ethers.constants.MaxUint256,
-          { value: ethers.utils.parseUnits('100', 'ether') }
+          ethers.constants.MaxUint256
         )
-      ).to.changeEtherBalance(swapper.address, `-${exp(100, 18)}`)
+      ).to.changeTokenBalance(dai, swapper.address, `-${exp(100_000, 18)}`)
 
       let newPrice = await collateral.strictPrice()
       expect(prevPrice).to.be.lt(newPrice)
       prevPrice = newPrice
 
-      await wbtc.approve(uniswapRouter.address, ethers.constants.MaxUint256)
-      const wbtcBalance = await wbtc.balanceOf(swapper.address)
+      const usdc = await ethers.getContractAt('ERC20', USDC)
+      await usdc.approve(uniswapRouter.address, ethers.constants.MaxUint256)
+      const usdcBalance = await usdc.balanceOf(swapper.address)
       await expect(
-        uniswapRouter.swapExactTokensForETH(
-          wbtcBalance,
-          0,
-          [WBTC, WETH],
+        uniswapRouter.swapExactTokensForTokens(
+          usdcBalance,
+          exp(99_000, 18),
+          [USDC, DAI],
           swapper.address,
           ethers.constants.MaxUint256
         )
-      ).to.changeTokenBalance(wbtc, swapper.address, `-${wbtcBalance}`)
+      ).to.changeTokenBalance(usdc, swapper.address, `-${usdcBalance}`)
 
       newPrice = await collateral.strictPrice()
       expect(prevPrice).to.be.gt(newPrice)
@@ -291,94 +309,60 @@ describe('UniswapV2NonFiatLPCollateral', () => {
       const collateral = await deployCollateral()
       let prevRefPerTok = await collateral.refPerTok()
       const [swapper] = await ethers.getSigners()
-      const wbtcEthLp = await ethers.getContractAt('UniswapV2Pair', WBTC_ETH_PAIR)
+      const daiUsdcLp = await ethers.getContractAt('UniswapV2Pair', DAI_USDC_PAIR)
 
-      const weth = await ethers.getContractAt('ERC20', WETH)
-      await weth.approve(UNISWAP_ROUTER, ethers.constants.MaxUint256)
-      const wbtc = await ethers.getContractAt('ERC20', WBTC)
+      const dai = await ethers.getContractAt('ERC20', DAI)
+      await dai.approve(UNISWAP_ROUTER, ethers.constants.MaxUint256)
+      await whileImpersonating(DAI_HOLDER, async (signer) => {
+        const balance = await dai.balanceOf(signer.address)
+        await dai.connect(signer).transfer(swapper.address, balance)
+      })
 
       const uniswapRouter = await ethers.getContractAt('UniswapV2Router02', UNISWAP_ROUTER)
       await expect(
-        uniswapRouter.swapExactETHForTokens(
-          0,
-          [WETH, WBTC],
+        uniswapRouter.swapExactTokensForTokens(
+          exp(100_000, 18),
+          exp(99_000, 6),
+          [DAI, USDC],
           swapper.address,
-          ethers.constants.MaxUint256,
-          { value: ethers.utils.parseUnits('100', 'ether') }
+          ethers.constants.MaxUint256
         )
-      ).to.changeEtherBalance(swapper.address, `-${exp(100, 18)}`)
+      ).to.changeTokenBalance(dai, swapper.address, `-${exp(100_000, 18)}`)
 
       let newRefPerTok = await collateral.refPerTok()
       expect(prevRefPerTok).to.be.lt(newRefPerTok)
       prevRefPerTok = newRefPerTok
 
-      // Remove 21% of Liquidity. WBTC_ETH_HOLDER ~21% of the supply of WBTC-ETH LP token
-      await whileImpersonating(WBTC_ETH_HOLDER, async (signer) => {
-        const balance = await wbtcEthLp.balanceOf(signer.address)
-        await wbtcEthLp.connect(signer).approve(uniswapRouter.address, ethers.constants.MaxUint256)
+      // Remove 95% of Liquidity. DAI_USDC_HOLDER ~95% of the supply of WBTC-ETH LP token
+      await whileImpersonating(DAI_USDC_HOLDER, async (signer) => {
+        const balance = await daiUsdcLp.balanceOf(signer.address)
+        await daiUsdcLp.connect(signer).approve(uniswapRouter.address, ethers.constants.MaxUint256)
         await expect(
           uniswapRouter
             .connect(signer)
-            .removeLiquidity(
-              WBTC,
-              WETH,
-              balance,
-              0,
-              0,
-              swapper.address,
-              ethers.constants.MaxUint256
-            )
-        ).to.changeTokenBalance(wbtcEthLp, WBTC_ETH_HOLDER, `-${balance}`)
+            .removeLiquidity(DAI, USDC, balance, 0, 0, swapper.address, ethers.constants.MaxUint256)
+        ).to.changeTokenBalance(daiUsdcLp, DAI_USDC_HOLDER, `-${balance}`)
       })
 
       newRefPerTok = await collateral.refPerTok()
       expect(prevRefPerTok).to.be.lt(newRefPerTok)
       prevRefPerTok = newRefPerTok
 
-      // Add huge liquidity that will make up ~94% of the LP's liquidity
-      await hre.network.provider.request({
-        method: 'hardhat_setBalance',
-        params: [
-          swapper.address,
-          '0xffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffffff',
-        ],
-      })
-
-      await allocateERC20(WBTC, WBTC_HOLDER, swapper.address, exp(3000, 8))
-      await wbtc.approve(uniswapRouter.address, ethers.constants.MaxUint256)
+      const usdc = await ethers.getContractAt('ERC20', USDC)
+      await usdc.approve(uniswapRouter.address, ethers.constants.MaxUint256)
 
       await expect(
-        uniswapRouter.addLiquidityETH(
-          WBTC,
-          exp(3_000, 8),
-          0,
-          0,
-          swapper.address,
-          ethers.constants.MaxUint256,
-          {
-            value: exp(100_000, 18),
-          }
-        )
-      ).to.changeTokenBalance(wbtc, swapper.address, `-${exp(3_000, 8)}`)
-
-      newRefPerTok = await collateral.refPerTok()
-      expect(prevRefPerTok).to.be.lt(newRefPerTok)
-      prevRefPerTok = newRefPerTok
-
-      // Remove ~94% of liquidity
-      const balance = await wbtcEthLp.balanceOf(swapper.address)
-      await wbtcEthLp.approve(uniswapRouter.address, ethers.constants.MaxUint256)
-      await expect(
-        uniswapRouter.removeLiquidity(
-          WBTC,
-          WETH,
-          balance,
+        uniswapRouter.addLiquidity(
+          DAI,
+          USDC,
+          exp(15_000_000, 18),
+          exp(15_000_000, 6),
           0,
           0,
           swapper.address,
           ethers.constants.MaxUint256
         )
-      ).to.changeTokenBalance(wbtcEthLp, swapper.address, `-${balance}`)
+      ).to.changeTokenBalance(dai, swapper.address, `-${exp(15_000_000, 18)}`)
 
       newRefPerTok = await collateral.refPerTok()
       expect(prevRefPerTok).to.be.lt(newRefPerTok)
@@ -402,7 +386,7 @@ describe('UniswapV2NonFiatLPCollateral', () => {
   })
 })
 
-describe('integration with reserve protocol', () => {
+describe('UniswapV2FiatLPCollateral integration with reserve protocol', () => {
   beforeEach(resetFork)
 
   it('sets up assets', async () => {
