@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: ISC
 pragma solidity 0.8.9;
 
-import "../IUniswapV2Pair.sol";
+import "../IUniV2Pair.sol";
 import "@openzeppelin/contracts/token/ERC20/ERC20.sol";
 
-contract PairMock is IUniswapV2Pair, ERC20 {
+contract PairMock is IUniV2Pair, ERC20 {
     address public immutable token0;
     address public immutable token1;
 
@@ -44,7 +44,7 @@ contract PairMock is IUniswapV2Pair, ERC20 {
         totalSupply_ = amount;
     }
 
-    function totalSupply() public view override(ERC20, IUniswapV2Pair) returns (uint256) {
+    function totalSupply() public view override(ERC20, IUniV2Pair) returns (uint256) {
         return totalSupply_;
     }
 

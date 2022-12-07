@@ -6,8 +6,8 @@ import "@openzeppelin/contracts/utils/math/Math.sol";
 import "@chainlink/contracts/src/v0.8/interfaces/AggregatorV3Interface.sol";
 import "reserve/contracts/plugins/assets/OracleLib.sol";
 import "reserve/contracts/libraries/Fixed.sol";
-import "./ICollateral.sol";
-import "./IUniswapV2Pair.sol";
+import "reserve/contracts/interfaces/IAsset.sol";
+import "./IUniV2Pair.sol";
 
 /**
  * @title UniswapV2NonFiatLPCollateral
@@ -17,7 +17,7 @@ contract UniswapV2NonFiatLPCollateral is ICollateral {
     using FixLib for uint192;
 
     struct Configuration {
-        IUniswapV2Pair pair;
+        IUniV2Pair pair;
         AggregatorV3Interface[] token0priceFeeds;
         AggregatorV3Interface[] token1priceFeeds;
         bytes32 targetName;
@@ -39,7 +39,7 @@ contract UniswapV2NonFiatLPCollateral is ICollateral {
     uint8 internal immutable _t1feedsLength;
 
     IERC20Metadata public immutable erc20;
-    IUniswapV2Pair public immutable pair;
+    IUniV2Pair public immutable pair;
 
     uint8 public immutable token0decimals;
     uint8 public immutable token1decimals;

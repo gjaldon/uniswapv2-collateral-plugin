@@ -66,6 +66,20 @@ The collateral becomes iffy in the following scenarios:
 
 This comes with a [deploy script](scripts/fiat/deploy.ts) and [configuration](scripts/fiat/configuration.ts). It is already fully configured for deployment to Mainnet for DAI-USDC pair. You may optionally set `oracleLib` if you want to use existing deployments for OracleLib.
 
+### Slither
+
+Below are Slither warnings that were hidden since they were found to be non-issues.
+
+- Hid all issues that were found in dependencies
+
+`PairMock.constructor(address,address,uint112,uint112,uint256)._totalSupply (contracts/test/PairMock.sol#21) shadows _totalSupply`
+
+- This was intentional and done only in the constructor. We do not also `_totalSupply` that comes with OpenZeppelin's ERC20.
+
+`UniswapV2FiatLPCollateral.status() (contracts/UniswapV2FiatLPCollateral.sol#211-219) uses timestamp for comparisons`
+
+- We use `block.timestamp` for comparisons in the defaulting logic of our collaterals. Since timestamp can not be manipulated to be too far into the future, this can only potentially default the collateral a little sooner.
+
 ### Social Media
 
 - Twitter - https://twitter.com/gjaldon
