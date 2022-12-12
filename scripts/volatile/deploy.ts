@@ -2,8 +2,8 @@ import { ethers, network } from 'hardhat'
 import {
   OracleLib,
   OracleLib__factory,
-  UniswapV2NonFiatLPCollateral,
-  UniswapV2NonFiatLPCollateral__factory,
+  UniswapV2VolatileLPCollateral,
+  UniswapV2VolatileLPCollateral__factory,
 } from '../../typechain-types'
 import { networkConfig } from './configuration'
 
@@ -26,21 +26,21 @@ async function main() {
     console.log(`Existing OracleLib at ${oracleLib.address} being used`)
   }
 
-  const UniswapV2NonFiatLPCollateralFactory: UniswapV2NonFiatLPCollateral__factory =
-    await ethers.getContractFactory('UniswapV2NonFiatLPCollateral', {
+  const UniswapV2VolatileLPCollateralFactory: UniswapV2VolatileLPCollateral__factory =
+    await ethers.getContractFactory('UniswapV2VolatileLPCollateral', {
       libraries: { OracleLib: oracleLib.address },
     })
 
-  const collateral = <UniswapV2NonFiatLPCollateral>(
-    await UniswapV2NonFiatLPCollateralFactory.deploy(config.collateralOpts)
+  const collateral = <UniswapV2VolatileLPCollateral>(
+    await UniswapV2VolatileLPCollateralFactory.deploy(config.collateralOpts)
   )
   console.log(
-    `Deploying UniswapV2NonFiatLPCollateral with transaction ${collateral.deployTransaction.hash}`
+    `Deploying UniswapV2VolatileLPCollateral with transaction ${collateral.deployTransaction.hash}`
   )
   await collateral.deployed()
 
   console.log(
-    `UniswapV2NonFiatLPCollateral deployed to ${collateral.address} as collateral to ${config.collateralOpts.pair}`
+    `UniswapV2VolatileLPCollateral deployed to ${collateral.address} as collateral to ${config.collateralOpts.pair}`
   )
 }
 
