@@ -164,7 +164,7 @@ contract UniswapV2NonFiatLPCollateral is ICollateral {
     }
 
     function strictPrice() public view returns (uint192) {
-        return totalLiquidity().div(_safeWrap(pair.totalSupply()));
+        return totalReservesPrice().div(_safeWrap(pair.totalSupply()));
     }
 
     /// Can return 0
@@ -218,7 +218,7 @@ contract UniswapV2NonFiatLPCollateral is ICollateral {
     }
 
     // === Helpers ===
-    function totalLiquidity() public view returns (uint192) {
+    function totalReservesPrice() public view returns (uint192) {
         (uint112 reserves0, uint112 reserves1, ) = pair.getReserves();
 
         uint192 totalReserves0 = shiftl_toFix(token0price().mul(reserves0), -int8(token0decimals));

@@ -1,7 +1,7 @@
 import { expect } from 'chai'
 import { time } from '@nomicfoundation/hardhat-network-helpers'
 import { ethers } from 'hardhat'
-import { makeReserveProtocol, deployCollateral } from './fixtures/fiat'
+import { makeReserveProtocol, deployCollateral } from './fixtures/stable'
 import {
   UNI,
   COMP,
@@ -27,7 +27,7 @@ import {
 } from './helpers'
 import { MockV3Aggregator, MockV3Aggregator__factory } from '../typechain-types'
 
-describe('UniswapV2FiatLPCollateral', () => {
+describe('UniswapV2StableLPCollateral', () => {
   describe('constructor validation', () => {
     it('validates targetName', async () => {
       await expect(deployCollateral({ targetName: ethers.constants.HashZero })).to.be.revertedWith(
@@ -112,7 +112,7 @@ describe('UniswapV2FiatLPCollateral', () => {
     it('returns value of total liquidity of the pair', async () => {
       const collateralA = await deployCollateral()
       // Should equal $34,575,106.26 which is total liquidity of DAI-USDC pair
-      expect(await collateralA.totalLiquidity()).to.eq(34575106261841690084139295n)
+      expect(await collateralA.totalReservesPrice()).to.eq(34575106261841690084139295n)
 
       const collateralB = await deployCollateral({
         pair: DAI_USDT_PAIR,
@@ -120,7 +120,7 @@ describe('UniswapV2FiatLPCollateral', () => {
       })
 
       // Should equal $6,812,202.93 which is total liquidity of WBTC-ETH pair
-      expect(await collateralB.totalLiquidity()).to.eq(6812202930942865233307666n)
+      expect(await collateralB.totalReservesPrice()).to.eq(6812202930942865233307666n)
     })
   })
 
@@ -429,7 +429,7 @@ describe('UniswapV2FiatLPCollateral', () => {
       expect(await collateral.whenDefault()).to.equal(prevWhenDefault)
     })
 
-    it('soft-defaults when token1 depegs from token0 beyond threshold', async () => {
+    it('soft-defaults when liquidity pool is unbalanced beyond threshold', async () => {
       const PairMockFactory = await ethers.getContractFactory('PairMock')
       const pairMock = await PairMockFactory.deploy(
         DAI,
@@ -559,7 +559,7 @@ describe('UniswapV2FiatLPCollateral', () => {
   })
 })
 
-describe('UniswapV2FiatLPCollateral integration with reserve protocol', () => {
+describe('UniswapV2StableLPCollateral integration with reserve protocol', () => {
   beforeEach(resetFork)
 
   it('sets up assets', async () => {

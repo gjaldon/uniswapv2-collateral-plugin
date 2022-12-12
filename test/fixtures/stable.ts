@@ -11,8 +11,8 @@ import {
   ETH_USD_FEED,
 } from '../helpers'
 import {
-  UniswapV2FiatLPCollateral,
-  UniswapV2FiatLPCollateral__factory,
+  UniswapV2StableLPCollateral,
+  UniswapV2StableLPCollateral__factory,
 } from '../../typechain-types'
 import { makeReserveProtocolWith } from '../fixtures'
 
@@ -29,7 +29,7 @@ interface CollateralOpts {
   delayUntilDefault?: bigint
 }
 
-const defaultOpts: UniswapV2FiatLPCollateral.ConfigurationStruct = {
+const defaultOpts: UniswapV2StableLPCollateral.ConfigurationStruct = {
   pair: DAI_USDC_PAIR,
   targetFeed: ethers.constants.AddressZero,
   token0priceFeeds: [DAI_USD_FEED],
@@ -49,13 +49,13 @@ export const makeReserveProtocol = async () => {
 
 export const deployCollateral = async (
   opts: CollateralOpts = {}
-): Promise<UniswapV2FiatLPCollateral> => {
+): Promise<UniswapV2StableLPCollateral> => {
   const newOpts = { ...defaultOpts, ...opts }
 
-  const UniswapV2CollateralFactory = <UniswapV2FiatLPCollateral__factory>(
-    await ethers.getContractFactory('UniswapV2FiatLPCollateral')
+  const UniswapV2CollateralFactory = <UniswapV2StableLPCollateral__factory>(
+    await ethers.getContractFactory('UniswapV2StableLPCollateral')
   )
-  const collateral = <UniswapV2FiatLPCollateral>await UniswapV2CollateralFactory.deploy(newOpts)
+  const collateral = <UniswapV2StableLPCollateral>await UniswapV2CollateralFactory.deploy(newOpts)
 
   return collateral
 }

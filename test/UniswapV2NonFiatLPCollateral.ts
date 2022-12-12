@@ -89,11 +89,11 @@ describe('UniswapV2NonFiatLPCollateral', () => {
     })
   })
 
-  describe('totalLiquidity', () => {
+  describe('totalReservesPrice', () => {
     it('returns value of total liquidity of the pair', async () => {
       const collateralA = await deployCollateral()
       // Should equal $7,184,249.72 which is total liquidity of WBTC-ETH pair
-      expect(await collateralA.totalLiquidity()).to.eq(7171099424319952054325288n)
+      expect(await collateralA.totalReservesPrice()).to.eq(7171099424319952054325288n)
 
       const collateralB = await deployCollateral({
         pair: USDC_ETH_PAIR,
@@ -101,7 +101,7 @@ describe('UniswapV2NonFiatLPCollateral', () => {
       })
 
       // Should equal $84,634,138.11 which is total liquidity of WBTC-ETH pair
-      expect(await collateralB.totalLiquidity()).to.eq(84634138115718441828431798n)
+      expect(await collateralB.totalReservesPrice()).to.eq(84634138115718441828431798n)
     })
   })
 
