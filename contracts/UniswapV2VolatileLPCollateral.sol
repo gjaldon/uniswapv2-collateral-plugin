@@ -10,9 +10,9 @@ import "reserve/contracts/interfaces/IAsset.sol";
 import "./IUniV2Pair.sol";
 
 /**
- * @title UniswapV2NonFiatLPCollateral
+ * @title UniswapV2VolatileLPCollateral
  */
-contract UniswapV2NonFiatLPCollateral is ICollateral {
+contract UniswapV2VolatileLPCollateral is ICollateral {
     using OracleLib for AggregatorV3Interface;
     using FixLib for uint192;
 

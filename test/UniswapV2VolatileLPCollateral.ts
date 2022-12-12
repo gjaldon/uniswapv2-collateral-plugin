@@ -1,7 +1,7 @@
 import { expect } from 'chai'
 import { time } from '@nomicfoundation/hardhat-network-helpers'
 import hre, { ethers } from 'hardhat'
-import { makeReserveProtocol, deployCollateral } from './fixtures/non-fiat'
+import { makeReserveProtocol, deployCollateral } from './fixtures/volatile'
 import {
   UNI,
   COMP,
@@ -24,7 +24,7 @@ import {
   resetFork,
 } from './helpers'
 
-describe('UniswapV2NonFiatLPCollateral', () => {
+describe('UniswapV2VolatileLPCollateral', () => {
   describe('constructor validation', () => {
     it('validates targetName', async () => {
       await expect(deployCollateral({ targetName: ethers.constants.HashZero })).to.be.revertedWith(

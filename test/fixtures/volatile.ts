@@ -11,8 +11,8 @@ import {
   DELAY_UNTIL_DEFAULT,
 } from '../helpers'
 import {
-  UniswapV2NonFiatLPCollateral,
-  UniswapV2NonFiatLPCollateral__factory,
+  UniswapV2VolatileLPCollateral,
+  UniswapV2VolatileLPCollateral__factory,
 } from '../../typechain-types'
 import { makeReserveProtocolWith } from '../fixtures'
 
@@ -28,7 +28,7 @@ interface CollateralOpts {
   delayUntilDefault?: bigint
 }
 
-const defaultOpts: UniswapV2NonFiatLPCollateral.ConfigurationStruct = {
+const defaultOpts: UniswapV2VolatileLPCollateral.ConfigurationStruct = {
   pair: WBTC_ETH_PAIR,
   token0priceFeeds: [WBTC_BTC_FEED, BTC_USD_FEED],
   token1priceFeeds: [ETH_USD_FEED],
@@ -47,13 +47,13 @@ export const makeReserveProtocol = async () => {
 
 export const deployCollateral = async (
   opts: CollateralOpts = {}
-): Promise<UniswapV2NonFiatLPCollateral> => {
+): Promise<UniswapV2VolatileLPCollateral> => {
   const newOpts = { ...defaultOpts, ...opts }
 
-  const UniswapV2CollateralFactory = <UniswapV2NonFiatLPCollateral__factory>(
-    await ethers.getContractFactory('UniswapV2NonFiatLPCollateral')
+  const UniswapV2CollateralFactory = <UniswapV2VolatileLPCollateral__factory>(
+    await ethers.getContractFactory('UniswapV2VolatileLPCollateral')
   )
-  const collateral = <UniswapV2NonFiatLPCollateral>await UniswapV2CollateralFactory.deploy(newOpts)
+  const collateral = <UniswapV2VolatileLPCollateral>await UniswapV2CollateralFactory.deploy(newOpts)
 
   return collateral
 }
