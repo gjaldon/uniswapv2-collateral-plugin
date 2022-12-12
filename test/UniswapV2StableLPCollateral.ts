@@ -95,14 +95,14 @@ describe('UniswapV2StableLPCollateral', () => {
   describe('getPeg', () => {
     it('returns 1 when target peg is fiat', async () => {
       // We pass Zero Address as target feed if we want to target fiat as peg
-      const collateral = await deployCollateral({ targetFeed: ethers.constants.AddressZero })
+      const collateral = await deployCollateral()
 
       expect(await collateral.getPeg()).to.eq(FIX_ONE)
     })
 
     it('returns price of ether when target peg is ether', async () => {
       // We pass the Price Feed if we want to target any non-fiat as peg
-      const collateral = await deployCollateral({ targetFeed: ETH_USD_FEED })
+      const collateral = await deployCollateral({}, ETH_USD_FEED)
 
       expect(await collateral.getPeg()).to.eq(1209809600000000000000n)
     })

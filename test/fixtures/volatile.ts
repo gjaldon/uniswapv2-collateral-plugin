@@ -15,6 +15,7 @@ import {
   UniswapV2VolatileLPCollateral__factory,
 } from '../../typechain-types'
 import { makeReserveProtocolWith } from '../fixtures'
+import { UniswapV2LPCollateral } from '../../typechain-types/contracts/UniswapV2VolatileLPCollateral'
 
 interface CollateralOpts {
   pair?: string
@@ -28,7 +29,7 @@ interface CollateralOpts {
   delayUntilDefault?: bigint
 }
 
-const defaultOpts: UniswapV2VolatileLPCollateral.ConfigurationStruct = {
+const defaultOpts: UniswapV2LPCollateral.ConfigurationStruct = {
   pair: WBTC_ETH_PAIR,
   token0priceFeeds: [WBTC_BTC_FEED, BTC_USD_FEED],
   token1priceFeeds: [ETH_USD_FEED],
