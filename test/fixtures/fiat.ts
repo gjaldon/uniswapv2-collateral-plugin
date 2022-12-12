@@ -8,6 +8,7 @@ import {
   DELAY_UNTIL_DEFAULT,
   DAI_USD_FEED,
   USDC_USD_FEED,
+  ETH_USD_FEED,
 } from '../helpers'
 import {
   UniswapV2FiatLPCollateral,
@@ -17,6 +18,7 @@ import { makeReserveProtocolWith } from '../fixtures'
 
 interface CollateralOpts {
   pair?: string
+  targetFeed?: string
   token0priceFeeds?: string[]
   token1priceFeeds?: string[]
   targetName?: string
@@ -29,6 +31,7 @@ interface CollateralOpts {
 
 const defaultOpts: UniswapV2FiatLPCollateral.ConfigurationStruct = {
   pair: DAI_USDC_PAIR,
+  targetFeed: ethers.constants.AddressZero,
   token0priceFeeds: [DAI_USD_FEED],
   token1priceFeeds: [USDC_USD_FEED],
   targetName: ethers.utils.formatBytes32String('USD'),

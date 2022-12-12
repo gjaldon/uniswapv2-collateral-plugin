@@ -23,6 +23,7 @@ import {
   DAI_HOLDER,
   DAI_USDC_PAIR,
   DAI_USDC_HOLDER,
+  ETH_USD_FEED,
 } from './helpers'
 import { MockV3Aggregator, MockV3Aggregator__factory } from '../typechain-types'
 
@@ -91,7 +92,23 @@ describe('UniswapV2FiatLPCollateral', () => {
     })
   })
 
-  describe('totalLiquidity', () => {
+  describe('getPeg', () => {
+    it('returns 1 when target peg is fiat', async () => {
+      // We pass Zero Address as target feed if we want to target fiat as peg
+      const collateral = await deployCollateral({ targetFeed: ethers.constants.AddressZero })
+
+      expect(await collateral.getPeg()).to.eq(FIX_ONE)
+    })
+
+    it('returns price of ether when target peg is ether', async () => {
+      // We pass the Price Feed if we want to target any non-fiat as peg
+      const collateral = await deployCollateral({ targetFeed: ETH_USD_FEED })
+
+      expect(await collateral.getPeg()).to.eq(1209809600000000000000n)
+    })
+  })
+
+  describe('totalReservesPrice', () => {
     it('returns value of total liquidity of the pair', async () => {
       const collateralA = await deployCollateral()
       // Should equal $34,575,106.26 which is total liquidity of DAI-USDC pair

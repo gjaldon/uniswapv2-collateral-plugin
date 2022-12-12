@@ -10,9 +10,9 @@ import "reserve/contracts/interfaces/IAsset.sol";
 import "./IUniV2Pair.sol";
 
 /**
- * @title UniswapV2FiatLPCollateral
+ * @title UniswapV2StableLPCollateral
  */
-contract UniswapV2FiatLPCollateral is ICollateral {
+contract UniswapV2StableLPCollateral is ICollateral {
     using OracleLib for AggregatorV3Interface;
     using FixLib for uint192;
 
@@ -20,6 +20,7 @@ contract UniswapV2FiatLPCollateral is ICollateral {
         IUniV2Pair pair;
         AggregatorV3Interface[] token0priceFeeds;
         AggregatorV3Interface[] token1priceFeeds;
+        AggregatorV3Interface targetFeed;
         bytes32 targetName;
         uint48 oracleTimeout;
         uint192 fallbackPrice;
@@ -27,6 +28,8 @@ contract UniswapV2FiatLPCollateral is ICollateral {
         uint192 defaultThreshold;
         uint256 delayUntilDefault;
     }
+
+    AggregatorV3Interface internal immutable targetFeed;
 
     AggregatorV3Interface internal immutable _t0feed0;
     AggregatorV3Interface internal immutable _t0feed1;
@@ -82,6 +85,7 @@ contract UniswapV2FiatLPCollateral is ICollateral {
         maxTradeVolume = config.maxTradeVolume;
         oracleTimeout = config.oracleTimeout;
         defaultThreshold = config.defaultThreshold;
+        targetFeed = config.targetFeed;
 
         // Solidity does not support immutable arrays. This is a hack to get the equivalent of
         // an immutable array so we do not have store the token feeds in the blockchain. This is
@@ -160,7 +164,7 @@ contract UniswapV2FiatLPCollateral is ICollateral {
     ) internal view returns (bool) {
         try priceFunc() returns (uint192 p) {
             // Check for soft default of underlying reference token
-            uint192 peg = targetPerRef();
+            uint192 peg = getPeg();
 
             // D18{UoA/ref}= D18{UoA/ref} * D18{1} / D18
             uint192 delta = (peg * defaultThreshold) / FIX_ONE; // D18{UoA/ref}
@@ -175,8 +179,13 @@ contract UniswapV2FiatLPCollateral is ICollateral {
         }
     }
 
+    function getPeg() public view returns (uint192) {
+        if (address(targetFeed) == address(0)) return targetPerRef();
+        return targetFeed.price(oracleTimeout).mul(targetPerRef());
+    }
+
     function strictPrice() public view returns (uint192) {
-        return totalLiquidity().div(_safeWrap(pair.totalSupply()));
+        return totalReservesPrice().div(_safeWrap(pair.totalSupply()));
     }
 
     /// Can return 0
@@ -233,13 +242,13 @@ contract UniswapV2FiatLPCollateral is ICollateral {
     function tokensRatio() public view returns (uint192) {
         (uint112 reserves0, uint112 reserves1, ) = pair.getReserves();
 
-        uint192 totalReserves0 = shiftl_toFix(token0price().mul(reserves0), -int8(token0decimals));
-        uint192 totalReserves1 = shiftl_toFix(token1price().mul(reserves1), -int8(token1decimals));
+        uint192 totalReserves0 = shiftl_toFix(reserves0, -int8(token0decimals));
+        uint192 totalReserves1 = shiftl_toFix(reserves1, -int8(token1decimals));
 
         return totalReserves0.div(totalReserves1);
     }
 
-    function totalLiquidity() public view returns (uint192) {
+    function totalReservesPrice() public view returns (uint192) {
         (uint112 reserves0, uint112 reserves1, ) = pair.getReserves();
 
         uint192 totalReserves0 = shiftl_toFix(token0price().mul(reserves0), -int8(token0decimals));
