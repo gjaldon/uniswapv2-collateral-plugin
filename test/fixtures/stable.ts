@@ -48,7 +48,9 @@ export const makeReserveProtocol = async () => {
 
 export const deployCollateral = async (
   opts: CollateralOpts = {},
-  targetFeed: string = ethers.constants.AddressZero
+  targetFeeds: string[] = [ethers.constants.AddressZero, ethers.constants.AddressZero],
+  assetsPegged: boolean[] = [true, true],
+  pairPegged: boolean = true
 ): Promise<UniswapV2StableLPCollateral> => {
   const newOpts = { ...defaultOpts, ...opts }
 
@@ -56,7 +58,7 @@ export const deployCollateral = async (
     await ethers.getContractFactory('UniswapV2StableLPCollateral')
   )
   const collateral = <UniswapV2StableLPCollateral>(
-    await UniswapV2CollateralFactory.deploy(newOpts, targetFeed)
+    await UniswapV2CollateralFactory.deploy(newOpts, targetFeeds, assetsPegged, pairPegged)
   )
 
   return collateral

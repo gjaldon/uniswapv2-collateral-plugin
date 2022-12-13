@@ -24,6 +24,9 @@ import {
   DAI_USDC_PAIR,
   DAI_USDC_HOLDER,
   ETH_USD_FEED,
+  STETH_ETH_FEED,
+  STETH_ETH_PAIR,
+  STETH,
 } from './helpers'
 import { MockV3Aggregator, MockV3Aggregator__factory } from '../typechain-types'
 
@@ -89,22 +92,6 @@ describe('UniswapV2StableLPCollateral', () => {
       await expect(deployCollateral({ delayUntilDefault: 0n })).to.be.revertedWith(
         'delayUntilDefault zero'
       )
-    })
-  })
-
-  describe('getPeg', () => {
-    it('returns 1 when target peg is fiat', async () => {
-      // We pass Zero Address as target feed if we want to target fiat as peg
-      const collateral = await deployCollateral()
-
-      expect(await collateral.getPeg()).to.eq(FIX_ONE)
-    })
-
-    it('returns price of ether when target peg is ether', async () => {
-      // We pass the Price Feed if we want to target any non-fiat as peg
-      const collateral = await deployCollateral({}, ETH_USD_FEED)
-
-      expect(await collateral.getPeg()).to.eq(1209809600000000000000n)
     })
   })
 
@@ -270,7 +257,7 @@ describe('UniswapV2StableLPCollateral', () => {
     })
   })
 
-  describe('status', () => {
+  describe('status for pair of USD stables', () => {
     it('maintains status in normal situations', async () => {
       const collateral = await deployCollateral()
       // Check initial state
@@ -473,6 +460,120 @@ describe('UniswapV2StableLPCollateral', () => {
       await expect(collateral.refresh()).to.not.emit(collateral, 'DefaultStatusChanged')
       expect(await collateral.status()).to.equal(CollateralStatus.DISABLED)
       expect(await collateral.whenDefault()).to.equal(prevWhenDefault)
+    })
+  })
+
+  describe('status for pair of ETH-pegged(stETH) token and ETH', () => {
+    it('soft-defaults when token0 depegs from ETH target beyond threshold', async () => {
+      const MockV3AggregatorFactory = <MockV3Aggregator__factory>(
+        await ethers.getContractFactory('MockV3Aggregator')
+      )
+      const stethMockFeed = <MockV3Aggregator>await MockV3AggregatorFactory.deploy(18, exp(1, 18))
+      const collateral = await deployCollateral(
+        {
+          pair: STETH_ETH_PAIR,
+          token0priceFeeds: [stethMockFeed.address, ETH_USD_FEED],
+          token1priceFeeds: [ETH_USD_FEED],
+        },
+        [ETH_USD_FEED, ethers.constants.AddressZero],
+        [true, false],
+        true
+      )
+      const delayUntilDefault = (await collateral.delayUntilDefault()).toBigInt()
+
+      // Check initial state
+      await expect(collateral.refresh()).to.not.emit(collateral, 'DefaultStatusChanged')
+      expect(await collateral.status()).to.equal(CollateralStatus.SOUND)
+      expect(await collateral.whenDefault()).to.equal(ethers.constants.MaxUint256)
+
+      // Depeg stETH:ETH - Reducing price by 20% from 1 to 0.8
+      await stethMockFeed.updateAnswer(exp(8, 17))
+
+      // Force updates - Should update whenDefault and status
+      let expectedDefaultTimestamp: bigint
+
+      // Set next block timestamp - for deterministic result
+      const nextBlockTimestamp = (await time.latest()) + 1
+      await time.setNextBlockTimestamp(nextBlockTimestamp)
+      expectedDefaultTimestamp = BigInt(nextBlockTimestamp) + delayUntilDefault
+
+      await expect(collateral.refresh())
+        .to.emit(collateral, 'DefaultStatusChanged')
+        .withArgs(CollateralStatus.SOUND, CollateralStatus.IFFY)
+      expect(await collateral.status()).to.equal(CollateralStatus.IFFY)
+      expect(await collateral.whenDefault()).to.equal(expectedDefaultTimestamp)
+
+      // Move time forward past delayUntilDefault
+      await time.increase(delayUntilDefault)
+      expect(await collateral.status()).to.equal(CollateralStatus.DISABLED)
+
+      // Nothing changes if attempt to refresh after default
+      let prevWhenDefault: bigint = (await collateral.whenDefault()).toBigInt()
+      await expect(collateral.refresh()).to.not.emit(collateral, 'DefaultStatusChanged')
+      expect(await collateral.status()).to.equal(CollateralStatus.DISABLED)
+      expect(await collateral.whenDefault()).to.equal(prevWhenDefault)
+    })
+
+    it("ETH does not soft-default since it's not a pegged asset", async () => {
+      const MockV3AggregatorFactory = <MockV3Aggregator__factory>(
+        await ethers.getContractFactory('MockV3Aggregator')
+      )
+      const ethMockFeed = <MockV3Aggregator>await MockV3AggregatorFactory.deploy(18, exp(1500, 18))
+      const collateral = await deployCollateral(
+        {
+          pair: STETH_ETH_PAIR,
+          token0priceFeeds: [STETH_ETH_FEED, ethMockFeed.address],
+          token1priceFeeds: [ethMockFeed.address],
+        },
+        [ethMockFeed.address, ethers.constants.AddressZero],
+        [true, false],
+        true
+      )
+      // Check initial state
+      await expect(collateral.refresh()).to.not.emit(collateral, 'DefaultStatusChanged')
+      expect(await collateral.status()).to.equal(CollateralStatus.SOUND)
+      expect(await collateral.whenDefault()).to.equal(ethers.constants.MaxUint256)
+
+      // Simulate ETH volatility with a 50% drop in price
+      await ethMockFeed.updateAnswer(exp(750, 18))
+
+      await expect(collateral.refresh()).to.not.emit(collateral, 'DefaultStatusChanged')
+      expect(await collateral.status()).to.equal(CollateralStatus.SOUND)
+    })
+
+    it('soft-defaults when stETH-ETH pair is unbalanced beyond threshold', async () => {
+      const PairMockFactory = await ethers.getContractFactory('PairMock')
+      const pairMock = await PairMockFactory.deploy(
+        STETH,
+        WETH,
+        exp(10_000, 18),
+        exp(10_000, 18),
+        exp(1_000, 18)
+      )
+      const collateral = await deployCollateral(
+        {
+          pair: STETH_ETH_PAIR,
+          token0priceFeeds: [STETH_ETH_FEED, ETH_USD_FEED],
+          token1priceFeeds: [ETH_USD_FEED],
+        },
+        [ETH_USD_FEED, ethers.constants.AddressZero],
+        [true, false],
+        true
+      )
+
+      // Check initial state
+      await collateral.refresh()
+      expect(await collateral.status()).to.equal(CollateralStatus.SOUND)
+      expect(await collateral.whenDefault()).to.equal(ethers.constants.MaxUint256)
+
+      // Depeg stETH:ETH - Set ratio stETH DAI reserves to ETH reserves 1:0.8
+      await pairMock.setReserves(exp(20_000, 18), exp(16_000, 6))
+
+      await expect(collateral.refresh())
+        .to.emit(collateral, 'DefaultStatusChanged')
+        .withArgs(CollateralStatus.SOUND, CollateralStatus.IFFY)
+      expect(await collateral.status()).to.equal(CollateralStatus.IFFY)
+      expect(await collateral.whenDefault()).to.be.gt(await time.latest())
     })
   })
 
