@@ -265,7 +265,7 @@ describe('UniswapV2StableLPCollateral', () => {
       expect(await collateral.whenDefault()).to.equal(ethers.constants.MaxUint256)
 
       // Force updates (with no changes)
-      await expect(collateral.refresh()).to.not.emit(collateral, 'DefaultStatusChanged')
+      await expect(collateral.refresh()).to.not.emit(collateral, 'CollateralStatusChanged')
 
       // State remains the same
       expect(await collateral.status()).to.equal(CollateralStatus.SOUND)
@@ -287,7 +287,7 @@ describe('UniswapV2StableLPCollateral', () => {
       expect(await collateral.status()).to.equal(CollateralStatus.SOUND)
       expect(await collateral.whenDefault()).to.equal(ethers.constants.MaxUint256)
 
-      await expect(collateral.refresh()).to.not.emit(collateral, 'DefaultStatusChanged')
+      await expect(collateral.refresh()).to.not.emit(collateral, 'CollateralStatusChanged')
       // State remains the same
       expect(await collateral.status()).to.equal(CollateralStatus.SOUND)
       expect(await collateral.whenDefault()).to.equal(ethers.constants.MaxUint256)
@@ -296,7 +296,7 @@ describe('UniswapV2StableLPCollateral', () => {
       await pairMock.setReserves(0, 0)
 
       // Collateral defaults due to refPerTok() going down
-      await expect(collateral.refresh()).to.emit(collateral, 'DefaultStatusChanged')
+      await expect(collateral.refresh()).to.emit(collateral, 'CollateralStatusChanged')
       expect(await collateral.status()).to.equal(CollateralStatus.DISABLED)
       expect(await collateral.whenDefault()).to.equal(await time.latest())
     })
@@ -318,7 +318,7 @@ describe('UniswapV2StableLPCollateral', () => {
       await daiMockFeed.updateAnswer(exp(8, 17))
 
       await expect(collateral.refresh())
-        .to.emit(collateral, 'DefaultStatusChanged')
+        .to.emit(collateral, 'CollateralStatusChanged')
         .withArgs(CollateralStatus.SOUND, CollateralStatus.IFFY)
       expect(await collateral.status()).to.equal(CollateralStatus.IFFY)
 
@@ -327,7 +327,7 @@ describe('UniswapV2StableLPCollateral', () => {
 
       // Collateral becomes sound again because peg has recovered
       await expect(collateral.refresh())
-        .to.emit(collateral, 'DefaultStatusChanged')
+        .to.emit(collateral, 'CollateralStatusChanged')
         .withArgs(CollateralStatus.IFFY, CollateralStatus.SOUND)
       expect(await collateral.status()).to.equal(CollateralStatus.SOUND)
     })
@@ -358,7 +358,7 @@ describe('UniswapV2StableLPCollateral', () => {
       expectedDefaultTimestamp = BigInt(nextBlockTimestamp) + delayUntilDefault
 
       await expect(collateral.refresh())
-        .to.emit(collateral, 'DefaultStatusChanged')
+        .to.emit(collateral, 'CollateralStatusChanged')
         .withArgs(CollateralStatus.SOUND, CollateralStatus.IFFY)
       expect(await collateral.status()).to.equal(CollateralStatus.IFFY)
       expect(await collateral.whenDefault()).to.equal(expectedDefaultTimestamp)
@@ -369,7 +369,7 @@ describe('UniswapV2StableLPCollateral', () => {
 
       // Nothing changes if attempt to refresh after default
       let prevWhenDefault: bigint = (await collateral.whenDefault()).toBigInt()
-      await expect(collateral.refresh()).to.not.emit(collateral, 'DefaultStatusChanged')
+      await expect(collateral.refresh()).to.not.emit(collateral, 'CollateralStatusChanged')
       expect(await collateral.status()).to.equal(CollateralStatus.DISABLED)
       expect(await collateral.whenDefault()).to.equal(prevWhenDefault)
     })
@@ -400,7 +400,7 @@ describe('UniswapV2StableLPCollateral', () => {
       expectedDefaultTimestamp = BigInt(nextBlockTimestamp) + delayUntilDefault
 
       await expect(collateral.refresh())
-        .to.emit(collateral, 'DefaultStatusChanged')
+        .to.emit(collateral, 'CollateralStatusChanged')
         .withArgs(CollateralStatus.SOUND, CollateralStatus.IFFY)
       expect(await collateral.status()).to.equal(CollateralStatus.IFFY)
       expect(await collateral.whenDefault()).to.equal(expectedDefaultTimestamp)
@@ -411,7 +411,7 @@ describe('UniswapV2StableLPCollateral', () => {
 
       // Nothing changes if attempt to refresh after default
       let prevWhenDefault: bigint = (await collateral.whenDefault()).toBigInt()
-      await expect(collateral.refresh()).to.not.emit(collateral, 'DefaultStatusChanged')
+      await expect(collateral.refresh()).to.not.emit(collateral, 'CollateralStatusChanged')
       expect(await collateral.status()).to.equal(CollateralStatus.DISABLED)
       expect(await collateral.whenDefault()).to.equal(prevWhenDefault)
     })
@@ -446,7 +446,7 @@ describe('UniswapV2StableLPCollateral', () => {
       expectedDefaultTimestamp = BigInt(nextBlockTimestamp) + delayUntilDefault
 
       await expect(collateral.refresh())
-        .to.emit(collateral, 'DefaultStatusChanged')
+        .to.emit(collateral, 'CollateralStatusChanged')
         .withArgs(CollateralStatus.SOUND, CollateralStatus.IFFY)
       expect(await collateral.status()).to.equal(CollateralStatus.IFFY)
       expect(await collateral.whenDefault()).to.equal(expectedDefaultTimestamp)
@@ -457,7 +457,7 @@ describe('UniswapV2StableLPCollateral', () => {
 
       // Nothing changes if attempt to refresh after default
       let prevWhenDefault: bigint = (await collateral.whenDefault()).toBigInt()
-      await expect(collateral.refresh()).to.not.emit(collateral, 'DefaultStatusChanged')
+      await expect(collateral.refresh()).to.not.emit(collateral, 'CollateralStatusChanged')
       expect(await collateral.status()).to.equal(CollateralStatus.DISABLED)
       expect(await collateral.whenDefault()).to.equal(prevWhenDefault)
     })
@@ -498,7 +498,7 @@ describe('UniswapV2StableLPCollateral', () => {
       expectedDefaultTimestamp = BigInt(nextBlockTimestamp) + delayUntilDefault
 
       await expect(collateral.refresh())
-        .to.emit(collateral, 'DefaultStatusChanged')
+        .to.emit(collateral, 'CollateralStatusChanged')
         .withArgs(CollateralStatus.SOUND, CollateralStatus.IFFY)
       expect(await collateral.status()).to.equal(CollateralStatus.IFFY)
       expect(await collateral.whenDefault()).to.equal(expectedDefaultTimestamp)
@@ -509,7 +509,7 @@ describe('UniswapV2StableLPCollateral', () => {
 
       // Nothing changes if attempt to refresh after default
       let prevWhenDefault: bigint = (await collateral.whenDefault()).toBigInt()
-      await expect(collateral.refresh()).to.not.emit(collateral, 'DefaultStatusChanged')
+      await expect(collateral.refresh()).to.not.emit(collateral, 'CollateralStatusChanged')
       expect(await collateral.status()).to.equal(CollateralStatus.DISABLED)
       expect(await collateral.whenDefault()).to.equal(prevWhenDefault)
     })
@@ -531,14 +531,14 @@ describe('UniswapV2StableLPCollateral', () => {
         true
       )
       // Check initial state
-      await expect(collateral.refresh()).to.not.emit(collateral, 'DefaultStatusChanged')
+      await expect(collateral.refresh()).to.not.emit(collateral, 'CollateralStatusChanged')
       expect(await collateral.status()).to.equal(CollateralStatus.SOUND)
       expect(await collateral.whenDefault()).to.equal(ethers.constants.MaxUint256)
 
       // Simulate ETH volatility with a 50% drop in price
       await ethMockFeed.updateAnswer(exp(750, 18))
 
-      await expect(collateral.refresh()).to.not.emit(collateral, 'DefaultStatusChanged')
+      await expect(collateral.refresh()).to.not.emit(collateral, 'CollateralStatusChanged')
       expect(await collateral.status()).to.equal(CollateralStatus.SOUND)
     })
 
@@ -570,7 +570,7 @@ describe('UniswapV2StableLPCollateral', () => {
       )
 
       await expect(collateral.refresh())
-        .to.emit(collateral, 'DefaultStatusChanged')
+        .to.emit(collateral, 'CollateralStatusChanged')
         .withArgs(CollateralStatus.SOUND, CollateralStatus.IFFY)
       // await expect(collateral.refresh())
       expect(await collateral.status()).to.equal(CollateralStatus.IFFY)
@@ -598,7 +598,7 @@ describe('UniswapV2StableLPCollateral', () => {
       )
 
       // Check initial state
-      await expect(collateral.refresh()).to.not.emit(collateral, 'DefaultStatusChanged')
+      await expect(collateral.refresh()).to.not.emit(collateral, 'CollateralStatusChanged')
       expect(await collateral.status()).to.equal(CollateralStatus.SOUND)
       expect(await collateral.whenDefault()).to.equal(ethers.constants.MaxUint256)
 
@@ -606,7 +606,7 @@ describe('UniswapV2StableLPCollateral', () => {
       await usdcMockFeed.updateAnswer(exp(8, 5))
 
       await expect(collateral.refresh())
-        .to.emit(collateral, 'DefaultStatusChanged')
+        .to.emit(collateral, 'CollateralStatusChanged')
         .withArgs(CollateralStatus.SOUND, CollateralStatus.IFFY)
       expect(await collateral.status()).to.equal(CollateralStatus.IFFY)
       expect(await collateral.whenDefault()).to.be.gt(await time.latest())
@@ -635,7 +635,7 @@ describe('UniswapV2StableLPCollateral', () => {
         [true, false],
         false
       )
-      await expect(collateral.refresh()).to.not.emit(collateral, 'DefaultStatusChanged')
+      await expect(collateral.refresh()).to.not.emit(collateral, 'CollateralStatusChanged')
       expect(await collateral.status()).to.equal(CollateralStatus.SOUND)
       expect(await collateral.whenDefault()).to.eq(ethers.constants.MaxUint256)
     })

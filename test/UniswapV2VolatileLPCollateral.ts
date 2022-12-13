@@ -248,7 +248,7 @@ describe('UniswapV2VolatileLPCollateral', () => {
       expect(await collateral.whenDefault()).to.equal(ethers.constants.MaxUint256)
 
       // Force updates (with no changes)
-      await expect(collateral.refresh()).to.not.emit(collateral, 'DefaultStatusChanged')
+      await expect(collateral.refresh()).to.not.emit(collateral, 'CollateralStatusChanged')
 
       // State remains the same
       expect(await collateral.status()).to.equal(CollateralStatus.SOUND)
@@ -270,7 +270,7 @@ describe('UniswapV2VolatileLPCollateral', () => {
       expect(await collateral.status()).to.equal(CollateralStatus.SOUND)
       expect(await collateral.whenDefault()).to.equal(ethers.constants.MaxUint256)
 
-      await expect(collateral.refresh()).to.not.emit(collateral, 'DefaultStatusChanged')
+      await expect(collateral.refresh()).to.not.emit(collateral, 'CollateralStatusChanged')
       // State remains the same
       expect(await collateral.status()).to.equal(CollateralStatus.SOUND)
       expect(await collateral.whenDefault()).to.equal(ethers.constants.MaxUint256)
@@ -279,7 +279,7 @@ describe('UniswapV2VolatileLPCollateral', () => {
       await pairMock.setReserves(0, 0)
 
       // Collateral defaults due to refPerTok() going down
-      await expect(collateral.refresh()).to.emit(collateral, 'DefaultStatusChanged')
+      await expect(collateral.refresh()).to.emit(collateral, 'CollateralStatusChanged')
       expect(await collateral.status()).to.equal(CollateralStatus.DISABLED)
       expect(await collateral.whenDefault()).to.equal(await time.latest())
     })
