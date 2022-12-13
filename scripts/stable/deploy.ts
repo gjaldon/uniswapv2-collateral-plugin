@@ -34,7 +34,9 @@ async function main() {
   const collateral = <UniswapV2StableLPCollateral>(
     await UniswapV2StableLPCollateralFactory.deploy(
       config.collateralOpts,
-      ethers.constants.AddressZero
+      [ethers.constants.AddressZero, ethers.constants.AddressZero],
+      [true, true],
+      true
     )
   )
   console.log(

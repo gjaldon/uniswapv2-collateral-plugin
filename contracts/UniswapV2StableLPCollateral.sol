@@ -23,6 +23,7 @@ contract UniswapV2StableLPCollateral is UniswapV2LPCollateral {
         bool _pairPegged
     ) UniswapV2LPCollateral(config) {
         require(targetPegFeeds.length == 2, "must set target peg feed for each token");
+        require(assetsPegged.length == 2, "must set assetsPegged for each token");
         targetPegFeed0 = targetPegFeeds[0];
         targetPegFeed1 = targetPegFeeds[1];
         assetPegged0 = assetsPegged[0];

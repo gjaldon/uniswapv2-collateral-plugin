@@ -1,25 +1,54 @@
-# UniswapV2 Collateral Plugin
+# UniswapV2 Collateral Plugins
 
-This is a [UniswapV2](https://docs.uniswap.org/contracts/v2/overview) Collateral Plugin for the [Reserve](https://reserve.org/en/) Protocol.
+This repo contains [Reserve Protocol](https://reserve.org/en/) collateral plugins for [UniswapV2](https://docs.uniswap.org/contracts/v2/overview).
 
-This plugin enables the use of any UniswapV2 Liquidity Token as collateral within the Reserve Protocol. Some important notes about this collateral plugin:
+This plugin enables the use of any UniswapV2 Liquidity Token as collateral within the Reserve Protocol. When using these liquidity tokens as collateral, we need to take into account the pair of assets in the liquidity pool. When assets in the pool are pegged, we will need to ensure assets maintain peg within a given threshold. Given this, we can categorize Liquidity Pairs in UniswapV2 as the following:
 
-- There are Collateral Plugins which are `UniswapV2NonFiatLPCollateral` and `UniswapV2FiatLPCollateral`. `UniswapV2FiatLPCollateral` is to be used for Liquidity Tokens of Liquidity Pairs that are **both** stablecoins such as the DAI-USDC pair. For every other Liquidity Pair, we will need to use the `UniswapV2NonFiatLPCollateral`.
-- Target name for `UniswapV2NonFiatLPCollateral` should follow the format of `UNIV2SQRTWBTCETH`, where `WBTCETH` is the name of the tokens of the liquidity pair being collateralized.
-- Multiple price feeds can be passed via `token0priceFeeds` and `token1priceFeeds` when deploying the collateral plugin. This is for cases when one price feed is not enough to get the price of a token. For example, there is no Chainlink feed for WBTC/USD on Ethereum Mainnet. To get USD price of WBTC in Mainnet, we will need 2 price feeds - WBTC/BTC and BTC/USD.
-- Internally, `token0priceFeeds` and `token1priceFeeds` are stored as multiple separate immutable variables instead of just one array-type state variable for each. This is a gas-optimization to avoid using SSTORE/SLOAD opcodes which are necessary but expensive operations when using state variables. Immutable variables, on the other hand, are embedded in the bytecode and are much cheaper to use.
+1. Fiat pairs - pairs of assets pegged to fiat such as DAI-USDC and USDC-USDT
+2. Non-fiat stable pairs - pairs of assets pegged to a non-fiat asset such as stETH-ETH and wBTC-BTC
+3. Pegged and Volatile pair - one of the pair is a pegged asset while the other is a volatile one. Examples are imBTC-ETH and USDC-ETH
+4. Volatile pairs - both assets in the pair are volatile and not pegged to any asset such as UNI-ETH and MKR-ETH
 
-## Implementation for Non-Fiat LP Collateral
+Due to these differences across Liquidity Pairs, there are 2 UniswapV2 Collateral Plugins in this repo which are:
 
-|       `tok`        |      `ref`       |     `target`     | `UoA` |
-| :----------------: | :--------------: | :--------------: | :---: |
-| UniswapV2 LP Token | UNIV2SQRTWBTCETH | UNIV2SQRTWBTCETH |  USD  |
+1. `UniswapV2VolatileLPCollateral` - this is the plugin to use for Volatile Pairs like UNI-ETH and MKR-ETH.
+2. `UniswapV2StableLPCollateral` - this is the plugin to use for any Liquidity Pair that has at least one pegged asset.
 
-The table above is an example of accounting units for a Non-Fiat LP like WBTC-ETH. The reference and target units are the square root of the invariant.
+## Usage
+
+### Multiple Price Feeds
+
+Some tokens require multiple price feeds since they do not have a direct price feed to USD. One example of this is WBTC. In ethereum mainnet, there is no WBTC-USD price feed (at time of writing.) To get the USD price of WBTC, we need the chainlink feeds WBTC-BTC and BTC-USD. To support this, both collateral plugins have `token0priceFeeds` and `token1priceFeeds` deployment parameters where you can pass multiple price feeds.
+
+### Target Pegs
+
+Each token in a Liquidity Pair may have different target pegs. For example, WBTC-USDC has WBTC pegged to BTC while USDC pegged to fiat USD. To account for this, `UniswapV2StableLPCollateral` has a `targetPegFeeds` deployment parameter, which is an array of 2 price feeds. The first price feed is for token0, and the second is for token1. For tokens that are pegged to fiat, you will need to pass the zero address since no price feed is needed for those. Stablecoins are always pegged to 1 fiat currency whether that be USD, EUR, PHP, etc...
+
+### Pegged Assets
+
+Since `UniswapV2StableLPCollateral` can accept Liquidity Pairs that have one non-pegged token and a pegged token, an `assetsPegged` deployment parameter exists to flag tokens as pegged assets or not. `assetsPegged` is an array of 2 booleans. For USDC-ETH pair, we would need to specify USDC as a pegged asset and ETH as a non-pegged asset. To do that, we pass `[true, false]` as the `assetsPegged` deployment parameter where USDC(token0) has true while ETH(token1) has false.
+
+### Pegged Pair
+
+Some Liquidity Pairs have tokens that are pegged to each other. Examples of these are DAI-USDC, STETH-ETH and WBTC-BTC. To make the Collateral Plugin aware that a pair is pegged, `UniswapV2StableLPCollateral` has a `pairPegged` deployment parameter which accepts a boolean. For pegged pairs like DAI-USDC, `pairPegged` should be true.
+
+## Implementation Notes
+
+### Immutable Arrays for Price Feeds
+
+Internally, `token0priceFeeds` and `token1priceFeeds` are stored as multiple separate immutable variables instead of just one array-type state variable for each. This is a gas-optimization done to avoid using SSTORE/SLOAD opcodes which are necessary but expensive operations when using state variables. Immutable variables, on the other hand, are embedded in the bytecode and are much cheaper to use which leads to more gas-efficient `price`, `strictPrice` and `refresh` functions.
 
 ### refPerTok
 
 `refPerTok() = sqrt(x * y)/L` where `x` and `y` are token0 and token1 reserves and L is the total supply of the liquidity token. This value monotonically increases as swaps happen and as liquidity is added or removed from the liquidity pair.
+
+## Implementation for Volatile LP Collateral
+
+|       `tok`        |      `ref`      |    `target`     | `UoA` |
+| :----------------: | :-------------: | :-------------: | :---: |
+| UniswapV2 LP Token | UNIV2SQRTMKRETH | UNIV2SQRTMKRETH |  USD  |
+
+The table above is an example of accounting units for a Volatile LP like MKR-ETH. The reference and target units are the square root of the invariant.
 
 ### refresh
 
@@ -34,7 +63,7 @@ The collateral becomes iffy in the following scenarios:
 
 ### Deployment
 
-This comes with a [deploy script](scripts/non-fiat/deploy.ts) and [configuration](scripts/non-fiat/configuration.ts). It is already fully configured for deployment to Mainnet for WBTC-ETH pair. You may optionally set `oracleLib` if you want to use existing deployments for OracleLib.
+This comes with a [deploy script](scripts/volatile/deploy.ts) and [configuration](scripts/volatile/configuration.ts). It is already fully configured for deployment to Mainnet for WBTC-ETH pair. You may optionally set `oracleLib` if you want to use existing deployments for OracleLib.
 
 ## Implementation for Fiat LP Collateral
 
@@ -43,10 +72,6 @@ This comes with a [deploy script](scripts/non-fiat/deploy.ts) and [configuration
 | UniswapV2 LP Token | UNIV2SQRTDAIUSDC |   USD    |  USD  |
 
 The table above is an example of accounting units for a Fiat LP like DAI-USDC. The reference unit is the square root of the invariant.
-
-### refPerTok
-
-`refPerTok() = sqrt(x * y)/L` where `x` and `y` are token0 and token1 reserves and L is the total supply of the liquidity token. This value monotonically increases as swaps happen and as liquidity is added or removed from the liquidity pair.
 
 ### refresh
 
@@ -64,7 +89,48 @@ The collateral becomes iffy in the following scenarios:
 
 ### Deployment
 
-This comes with a [deploy script](scripts/fiat/deploy.ts) and [configuration](scripts/fiat/configuration.ts). It is already fully configured for deployment to Mainnet for DAI-USDC pair. You may optionally set `oracleLib` if you want to use existing deployments for OracleLib.
+This comes with a [deploy script](scripts/stable/deploy.ts) and [configuration](scripts/stable/configuration.ts). It is already fully configured for deployment to Mainnet for DAI-USDC pair. You may optionally set `oracleLib` if you want to use existing deployments for OracleLib.
+
+## Implementation for Non-Fiat Stable LP Collateral
+
+|       `tok`        |       `ref`       | `target` | `UoA` |
+| :----------------: | :---------------: | :------: | :---: |
+| UniswapV2 LP Token | UNIV2SQRTSTETHETH |   ETH    |  USD  |
+
+The table above is an example of accounting units for a Non-Fiat Stable LP like STETH-ETH. The reference unit is the square root of the invariant.
+
+### refresh
+
+The collateral becomes disabled in the following scenarios:
+
+1. refPerTok() decreases. This happens when the total supply of the liquidity token is 0.
+2. Collateral has stayed IFFY beyond delayUntilDefault period.
+
+The collateral becomes iffy in the following scenarios:
+
+1. The price feed for token0 or token1 is failing.
+2. Token0 depegs from ETH beyond the default threshold.
+3. Token0 depegs from Token1 beyond the default threshold.
+
+## Implementation for Pegged and Volatile LP Collateral
+
+|       `tok`        |      `ref`       |     `target`     | `UoA` |
+| :----------------: | :--------------: | :--------------: | :---: |
+| UniswapV2 LP Token | UNIV2SQRTUSDCETH | UNIV2SQRTUSDCETH |  USD  |
+
+The table above is an example of accounting units for a Pegged and Volatile LP like USDC-ETH. The reference unit is the square root of the invariant. Both tokens in the pool are not pegged to each other.
+
+### refresh
+
+The collateral becomes disabled in the following scenarios:
+
+1. refPerTok() decreases. This happens when the total supply of the liquidity token is 0.
+2. Collateral has stayed IFFY beyond delayUntilDefault period.
+
+The collateral becomes iffy in the following scenarios:
+
+1. The price feed for token0 or token1 is failing.
+2. Token0 depegs from USD beyond the default threshold.
 
 ### Slither
 
